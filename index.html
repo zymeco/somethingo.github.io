@@ -458,40 +458,86 @@
 
     function loadCadToPreview(file) {
       const ext = String(file.name.split('.').pop() || '').trim().toLowerCase();
-      const reader = new FileReader();
 
-      reader.onload = () => {
-        try {
-          setCadStatus(`파일 로드 중 (${file.name})`);
-          if (cadMesh) {
-            cadScene.remove(cadMesh);
-            cadMesh = null;
-          }
+      if (!cadRenderer || !cadScene || !cadCamera) {
+        alert('CAD 뷰어가 초기화되지 않았습니다. 브라우저 하드웨어 가속(WebGL) 설정을 확인해주세요.');
+        setCadStatus('뷰어 미초기화(WebGL 확인)');
+        return;
+      }
 
-          if (ext === 'stl') {
-            const geometry = new THREE.STLLoader().parse(reader.result);
-            cadMesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0x60a5fa, metalness: 0.1, roughness: 0.6 }));
-          } else if (ext === 'obj') {
-            cadMesh = new THREE.OBJLoader().parse(String(reader.result || ''));
-          } else {
-            alert('CAD 미리보기는 .stl / .obj만 지원합니다.');
-          setCadStatus('지원하지 않는 확장자');
-            return;
-          }
-
-          applyMaterialMode(cadMesh);
-          cadScene.add(cadMesh);
-          fitCameraToObject(cadMesh);
-          setCadStatus(`표시 완료 (${file.name})`);
-        } catch (e) {
-          console.error(e);
-          alert('CAD 파일을 읽는 중 오류가 발생했습니다. 파일 손상/확장자/브라우저 설정을 확인해주세요.');
-          setCadStatus(`로드 실패 (${file.name})`);
+      const loadFromParsedObject = (parsed) => {
+        if (cadMesh) {
+          cadScene.remove(cadMesh);
+          cadMesh = null;
         }
+        cadMesh = parsed;
+        applyMaterialMode(cadMesh);
+        cadScene.add(cadMesh);
+        fitCameraToObject(cadMesh);
+        setCadStatus(`표시 완료 (${file.name})`);
       };
 
-      if (ext === 'stl') reader.readAsArrayBuffer(file);
-      else reader.readAsText(file, 'utf-8');
+      const parseStl = (buffer) => {
+        const loader = new THREE.STLLoader();
+        const geometry = loader.parse(buffer);
+        return new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0x60a5fa, metalness: 0.1, roughness: 0.6 }));
+      };
+
+      const parseObj = (text) => {
+        const loader = new THREE.OBJLoader();
+        return loader.parse(String(text || ''));
+      };
+
+      setCadStatus(`파일 로드 중 (${file.name})`);
+
+      if (ext === 'stl') {
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            loadFromParsedObject(parseStl(reader.result));
+          } catch (binaryError) {
+            try {
+              const text = new TextDecoder('utf-8', { fatal: false }).decode(reader.result);
+              const asciiBuffer = new TextEncoder().encode(text).buffer;
+              loadFromParsedObject(parseStl(asciiBuffer));
+              setCadStatus(`표시 완료(ASCII STL 파서) (${file.name})`);
+            } catch (asciiError) {
+              console.error('STL binary parse error:', binaryError);
+              console.error('STL ascii parse error:', asciiError);
+              alert('STL 파싱 실패: 파일이 매우 크거나 형식이 비표준일 수 있습니다. 가능하면 다른 STL(ASCII/Binary)로 저장 후 다시 시도해주세요.');
+              setCadStatus(`로드 실패(STL 파싱) (${file.name})`);
+            }
+          }
+        };
+        reader.onerror = () => {
+          setCadStatus(`로드 실패(파일 읽기 오류) (${file.name})`);
+          alert('STL 파일을 읽는 중 I/O 오류가 발생했습니다.');
+        };
+        reader.readAsArrayBuffer(file);
+        return;
+      }
+
+      if (ext === 'obj') {
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            loadFromParsedObject(parseObj(reader.result));
+          } catch (objError) {
+            console.error(objError);
+            setCadStatus(`로드 실패(OBJ 파싱) (${file.name})`);
+            alert('OBJ 파싱 실패: 파일 손상 또는 포맷 문제가 있을 수 있습니다.');
+          }
+        };
+        reader.onerror = () => {
+          setCadStatus(`로드 실패(파일 읽기 오류) (${file.name})`);
+          alert('OBJ 파일을 읽는 중 I/O 오류가 발생했습니다.');
+        };
+        reader.readAsText(file, 'utf-8');
+        return;
+      }
+
+      alert('CAD 미리보기는 .stl / .obj만 지원합니다.');
+      setCadStatus('지원하지 않는 확장자');
     }
 
     function saveCadPreviewImage() {
