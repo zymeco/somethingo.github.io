@@ -116,7 +116,7 @@
 
       <h3>성적서 CSV/엑셀 업로드</h3>
       <p class="muted">지원 형식: .csv, .xlsx, .xls</p>
-      <p class="muted">권장 헤더: 항목명, 기준값, 하한, 상한, 실측값, ctq (동의어 자동 인식)</p>
+      <p class="muted">권장 헤더: 항목명(GAP/FLUSH/HOLE), 기준값, LSL/USL, 실측(X1/X2...), ctq (동의어 자동 인식)</p>
       <input class="no-print" id="specFile" type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" />
       <div class="mapping-panel no-print" id="mappingPanel" style="display:none;">
         <p class="muted" style="margin-top:0;">기존 성적서 헤더를 자동 인식했습니다. 틀리면 아래에서 직접 컬럼을 지정한 뒤 적용하세요.</p>
@@ -205,11 +205,11 @@
     let heatmapEnabled = false;
 
     const HEADER_ALIASES = {
-      name: ['항목명', '측정항목', '검사항목', 'spec', 'spec_name', 'name', 'item'],
+      name: ['항목명', '측정항목', '검사항목', 'spec', 'spec_name', 'name', 'item', 'gap', 'flush', 'hole'],
       target: ['기준값', '기준', 'target', 'nominal', '기준치'],
       lower: ['하한', '하한값', 'lsl', 'lower', 'min'],
       upper: ['상한', '상한값', 'usl', 'upper', 'max'],
-      measured: ['실측값', '실측', '측정값', 'actual', 'result', '실적'],
+      measured: ['실측값', '실측', '측정값', 'actual', 'result', '실적', 'x1', 'x2', 'x3', 'x4', 'x5'],
       ctq: ['ctq', '중요특성', '중요도', 'critical']
     };
 
@@ -226,6 +226,20 @@
         if (aliases.includes(normalized)) return row[originalKey];
       }
       return undefined;
+    }
+
+    function pickMeasuredValue(row) {
+      const direct = pickField(row, 'measured');
+      if (direct !== undefined && String(direct).trim() !== '') return direct;
+
+      const xValues = Object.keys(row)
+        .filter((k) => /^x\d+$/i.test(String(k).trim()))
+        .map((k) => Number(row[k]))
+        .filter((v) => Number.isFinite(v));
+
+      if (!xValues.length) return undefined;
+      const avg = xValues.reduce((a, b) => a + b, 0) / xValues.length;
+      return avg;
     }
 
     function detectColumn(headers, key) {
@@ -676,11 +690,16 @@
 
     function toSpecRow(raw) {
       const normalizedCtq = String(raw.ctq || 'N').trim().toUpperCase();
+      let lower = Number(raw.lower);
+      let upper = Number(raw.upper);
+      if (Number.isFinite(lower) && Number.isFinite(upper) && lower > upper) {
+        [lower, upper] = [upper, lower];
+      }
       return {
         name: String(raw.name || '').trim(),
         target: Number(raw.target),
-        lower: Number(raw.lower),
-        upper: Number(raw.upper),
+        lower,
+        upper,
         measured: Number(raw.measured),
         ctq: normalizedCtq === 'Y' || normalizedCtq === '1' || normalizedCtq === 'TRUE' ? 'Y' : 'N',
       };
@@ -800,7 +819,7 @@
             target: pickField(row, 'target'),
             lower: pickField(row, 'lower'),
             upper: pickField(row, 'upper'),
-            measured: pickField(row, 'measured'),
+            measured: pickMeasuredValue(row),
             ctq: pickField(row, 'ctq') || 'N',
           }));
 
