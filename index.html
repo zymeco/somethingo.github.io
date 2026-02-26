@@ -35,6 +35,9 @@
     button.danger { background: #dc2626; }
     .muted { color: #64748b; font-size: 12px; }
     .mapping-panel { margin-top: 10px; padding: 10px; border: 1px dashed var(--line); border-radius: 8px; background: #f8fafc; }
+    .scan-layout { display: grid; grid-template-columns: 1.2fr 1fr; gap: 12px; align-items: start; }
+    .viewer-box { border: 1px solid var(--line); border-radius: 10px; background: #0b1220; padding: 8px; }
+    #cadPreviewCanvas { width: 100%; height: 320px; display: block; border-radius: 8px; background: #111827; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th, td { border-bottom: 1px solid #e2e8f0; padding: 8px; text-align: left; }
     th { background: #f1f5f9; }
@@ -45,7 +48,7 @@
     .kpi > div { border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: #f8fafc; }
     .kpi strong { display: block; margin-top: 2px; font-size: 20px; }
 
-    @media (max-width: 768px) { .kpi { grid-template-columns: 1fr; } }
+    @media (max-width: 768px) { .kpi { grid-template-columns: 1fr; } .scan-layout { grid-template-columns: 1fr; } }
 
     @media print {
       header, .no-print { display: none !important; }
@@ -120,19 +123,33 @@
     </section>
 
     <section class="card">
-      <h2>3) 3D 스캔 편차 입력</h2>
-      <p class="muted">형식: 영역,편차(mm). 예) 좌측플랜지,0.35</p>
-      <textarea id="scanCsv">좌측플랜지,0.35
+      <h2>3) 3D 스캔 편차 입력 / CAD 미리보기</h2>
+      <div class="scan-layout">
+        <div>
+          <p class="muted">형식: 영역,편차(mm). 예) 좌측플랜지,0.35</p>
+          <textarea id="scanCsv">좌측플랜지,0.35
 코너부,-0.22
 스프링백영역,0.18</textarea>
-      <h3>스캔 편차 CSV 파일 업로드</h3>
-      <input class="no-print" id="scanFile" type="file" accept=".csv,text/csv" />
-      <h3>기준 CAD 파일 업로드 (참조용)</h3>
-      <input class="no-print" id="cadFile" type="file" accept=".stl,.obj,model/stl,text/plain" />
-      <p class="muted" id="cadFileInfo">현재 선택된 CAD 파일 없음</p>
-      <div class="btn-row no-print">
-        <button id="analyzeBtn">통합 분석 실행</button>
-        <button class="secondary" id="printBtn">성적서(PDF) 출력</button>
+          <h3>스캔 편차 CSV 파일 업로드</h3>
+          <input class="no-print" id="scanFile" type="file" accept=".csv,text/csv" />
+          <h3>기준 CAD 파일 업로드</h3>
+          <input class="no-print" id="cadFile" type="file" accept=".stl,.obj,model/stl,text/plain" />
+          <p class="muted" id="cadFileInfo">현재 선택된 CAD 파일 없음</p>
+          <div class="btn-row no-print">
+            <button id="analyzeBtn">통합 분석 실행</button>
+            <button class="secondary" id="printBtn">성적서(PDF) 출력</button>
+          </div>
+        </div>
+        <div>
+          <h3>CAD 이미지화(우측 미리보기)</h3>
+          <div class="viewer-box">
+            <canvas id="cadPreviewCanvas"></canvas>
+          </div>
+          <div class="btn-row no-print">
+            <button class="secondary" id="saveCadImageBtn">CAD 미리보기 이미지 저장(PNG)</button>
+          </div>
+          <p class="muted">마우스로 회전/줌 가능하며, STL/OBJ 업로드 시 자동 표시됩니다.</p>
+        </div>
       </div>
     </section>
 
@@ -151,12 +168,21 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/loaders/STLLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/loaders/OBJLoader.js"></script>
   <script>
     const STORAGE_KEY = 'inspectionPrototype.v2';
     const specs = [];
     let pendingSpecRows = [];
     let pendingHeaders = [];
     let selectedCadFileName = '';
+    let cadScene;
+    let cadCamera;
+    let cadRenderer;
+    let cadControls;
+    let cadMesh = null;
 
     const HEADER_ALIASES = {
       name: ['항목명', '측정항목', '검사항목', 'spec', 'spec_name', 'name', 'item'],
@@ -295,6 +321,110 @@
 
       const recs = makeRecommendations(specs, scanRows);
       $('recommendations').innerHTML = recs.map((x) => `<li>${x}</li>`).join('');
+    }
+
+
+    function initCadPreview() {
+      const canvas = $('cadPreviewCanvas');
+      cadRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+      cadRenderer.setPixelRatio(window.devicePixelRatio || 1);
+      cadRenderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+
+      cadScene = new THREE.Scene();
+      cadScene.background = new THREE.Color(0x111827);
+
+      cadCamera = new THREE.PerspectiveCamera(45, canvas.clientWidth / canvas.clientHeight, 0.1, 10000);
+      cadCamera.position.set(160, 120, 160);
+
+      cadControls = new THREE.OrbitControls(cadCamera, canvas);
+      cadControls.enableDamping = true;
+      cadControls.dampingFactor = 0.06;
+
+      const hemi = new THREE.HemisphereLight(0xffffff, 0x223344, 1.0);
+      cadScene.add(hemi);
+      const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+      dir.position.set(100, 150, 100);
+      cadScene.add(dir);
+
+      const grid = new THREE.GridHelper(200, 20, 0x4b5563, 0x374151);
+      cadScene.add(grid);
+
+      function animate() {
+        requestAnimationFrame(animate);
+        cadControls.update();
+        cadRenderer.render(cadScene, cadCamera);
+      }
+      animate();
+
+      window.addEventListener('resize', () => {
+        if (!cadRenderer || !cadCamera) return;
+        const w = canvas.clientWidth;
+        const h = canvas.clientHeight;
+        cadRenderer.setSize(w, h, false);
+        cadCamera.aspect = w / h;
+        cadCamera.updateProjectionMatrix();
+      });
+    }
+
+    function fitCameraToObject(object3d) {
+      const box = new THREE.Box3().setFromObject(object3d);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      const maxSize = Math.max(size.x, size.y, size.z) || 100;
+      const distance = maxSize * 2.2;
+
+      cadCamera.position.set(center.x + distance, center.y + distance * 0.7, center.z + distance);
+      cadCamera.near = maxSize / 100;
+      cadCamera.far = maxSize * 100;
+      cadCamera.updateProjectionMatrix();
+      cadControls.target.copy(center);
+      cadControls.update();
+    }
+
+    function loadCadToPreview(file) {
+      const ext = (file.name.split('.').pop() || '').toLowerCase();
+      const reader = new FileReader();
+
+      reader.onload = () => {
+        try {
+          if (cadMesh) {
+            cadScene.remove(cadMesh);
+            cadMesh = null;
+          }
+
+          if (ext === 'stl') {
+            const geometry = new THREE.STLLoader().parse(reader.result);
+            const material = new THREE.MeshStandardMaterial({ color: 0x60a5fa, metalness: 0.1, roughness: 0.6 });
+            cadMesh = new THREE.Mesh(geometry, material);
+          } else if (ext === 'obj') {
+            cadMesh = new THREE.OBJLoader().parse(String(reader.result || ''));
+            cadMesh.traverse((child) => {
+              if (child.isMesh) {
+                child.material = new THREE.MeshStandardMaterial({ color: 0x60a5fa, metalness: 0.1, roughness: 0.6 });
+              }
+            });
+          } else {
+            alert('CAD 미리보기는 .stl / .obj만 지원합니다.');
+            return;
+          }
+
+          cadScene.add(cadMesh);
+          fitCameraToObject(cadMesh);
+        } catch (e) {
+          console.error(e);
+          alert('CAD 파일을 읽는 중 오류가 발생했습니다. 파일 형식을 확인해주세요.');
+        }
+      };
+
+      if (ext === 'stl') reader.readAsArrayBuffer(file);
+      else reader.readAsText(file, 'utf-8');
+    }
+
+    function saveCadPreviewImage() {
+      const link = document.createElement('a');
+      link.download = `cad-preview-${Date.now()}.png`;
+      link.href = cadRenderer.domElement.toDataURL('image/png');
+      link.click();
     }
 
     function setCadFileName(name) {
@@ -558,12 +688,18 @@
         const valid = /\.(stl|obj)$/i.test(file.name);
         if (!valid) {
           alert('기준 CAD 파일은 .stl 또는 .obj 형식을 권장합니다.');
+          e.target.value = '';
+          return;
         }
         setCadFileName(file.name);
+        loadCadToPreview(file);
       }
       e.target.value = '';
     });
 
+    $('saveCadImageBtn').addEventListener('click', saveCadPreviewImage);
+
+    initCadPreview();
     $('sampleBtn').click();
     setCadFileName('');
   </script>
