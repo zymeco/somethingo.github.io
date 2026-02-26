@@ -2,6 +2,24 @@
 
 
 ## 0) 웹에서 바로 열기 (다운로드 없이)
+## 0-1) 윈도우 프로그램(데스크톱 앱)으로 실행
+웹 브라우저 대신 **윈도우 앱처럼 실행**할 수 있도록 Electron 구성을 추가했습니다.
+
+### 개발 실행
+```powershell
+cd C:\Users\<you>\somethingo.github.io
+npm install
+npm run desktop
+```
+
+### 윈도우 설치파일(.exe) 만들기
+```powershell
+cd C:\Users\<you>\somethingo.github.io
+npm install
+npm run desktop:pack
+```
+생성 위치: `dist/` 폴더 (NSIS 설치파일)
+
 - 이 저장소는 GitHub Pages 배포 워크플로우(`.github/workflows/deploy-pages.yml`)를 포함합니다.
 - 저장소 관리자 계정에서 **Settings → Pages → Build and deployment → Source = GitHub Actions** 로 설정하면,
   push 후 웹 URL에서 바로 열 수 있습니다.
