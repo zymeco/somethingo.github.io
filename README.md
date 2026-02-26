@@ -5,6 +5,10 @@
 ## 0-1) 윈도우 프로그램(데스크톱 앱)으로 실행
 웹 브라우저 대신 **윈도우 앱처럼 실행**할 수 있도록 Electron 구성을 추가했습니다.
 
+### 가장 쉬운 방법(윈도우 일반 프로그램처럼)
+- `run-desktop.bat` 더블클릭: 데스크톱 앱 실행
+- `build-windows.bat` 더블클릭: 설치형(NSIS) + 포터블 exe 생성 (`dist/`)
+
 ### 개발 실행
 ```powershell
 cd C:\Users\<you>\somethingo.github.io

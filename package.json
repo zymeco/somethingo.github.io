@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "desktop": "electron .",
-    "desktop:pack": "electron-builder --win"
+    "desktop:pack": "electron-builder --win nsis portable"
   },
   "devDependencies": {
     "electron": "^33.2.1",
