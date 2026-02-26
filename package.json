@@ -1,0 +1,15 @@
+{
+  "name": "inspection-prototype",
+  "private": true,
+  "version": "1.1.0",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "node server.js",
+    "desktop": "electron .",
+    "desktop:pack": "electron-builder --win nsis portable"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  }
+}

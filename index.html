@@ -1,2 +1,969 @@
-blog
-<script type="text/javasript">location.href="https://somethingo.co.kr";</script>
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>초도제품 검사·보정 방향 제안 프로토타입</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --card: #fff;
+      --line: #d8e2f0;
+      --text: #0f172a;
+      --primary: #1d4ed8;
+      --secondary: #475569;
+      --ok: #166534;
+      --ng: #b91c1c;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Pretendard", "Noto Sans KR", sans-serif; color: var(--text); background: var(--bg); }
+    header { padding: 18px 20px; color: #fff; background: linear-gradient(135deg, #1d4ed8, #1e3a8a); }
+    header h1 { margin: 0 0 4px; font-size: 22px; }
+    header p { margin: 0; opacity: .92; }
+    main { max-width: 1200px; margin: 18px auto 28px; padding: 0 14px; display: grid; gap: 14px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; box-shadow: 0 2px 8px rgba(15,23,42,.05); }
+    h2 { margin: 0 0 10px; font-size: 18px; }
+    h3 { margin: 14px 0 8px; font-size: 15px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+    label { display: block; margin-bottom: 4px; font-size: 12px; color: #334155; }
+    input, select, textarea, button { width: 100%; font: inherit; border-radius: 8px; border: 1px solid var(--line); padding: 8px; }
+    textarea { min-height: 120px; resize: vertical; }
+    .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+    .btn-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin-top: 8px; }
+    button { border: none; color: #fff; background: var(--primary); font-weight: 600; cursor: pointer; }
+    button.secondary { background: var(--secondary); }
+    button.danger { background: #dc2626; }
+    .muted { color: #64748b; font-size: 12px; }
+    .mapping-panel { margin-top: 10px; padding: 10px; border: 1px dashed var(--line); border-radius: 8px; background: #f8fafc; }
+    .scan-layout { display: grid; grid-template-columns: 1.2fr 1fr; gap: 12px; align-items: start; }
+    .viewer-box { border: 1px solid var(--line); border-radius: 10px; background: #0b1220; padding: 8px; }
+    #cadPreviewCanvas { width: 100%; height: 320px; display: block; border-radius: 8px; background: #111827; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border-bottom: 1px solid #e2e8f0; padding: 8px; text-align: left; }
+    th { background: #f1f5f9; }
+    .pill { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+    .ok { color: var(--ok); background: #dcfce7; }
+    .ng { color: var(--ng); background: #fee2e2; }
+    .kpi { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .kpi > div { border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: #f8fafc; }
+    .kpi strong { display: block; margin-top: 2px; font-size: 20px; }
+
+    @media (max-width: 768px) { .kpi { grid-template-columns: 1fr; } .scan-layout { grid-template-columns: 1fr; } }
+
+    @media print {
+      header, .no-print { display: none !important; }
+      body { background: #fff; }
+      main { margin: 0; max-width: 100%; padding: 0; }
+      .card { box-shadow: none; border: 1px solid #ccc; break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>초도제품 검사 · 스펙 비교 · 수정방향 제안</h1>
+    <p>성적서 입력/파일업로드 + 3D 편차 분석 + 추천 + 저장/출력</p>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>1) 기본정보</h2>
+      <div class="grid">
+        <div><label>차종</label><input id="model" value="EV9" /></div>
+        <div><label>부품명</label><input id="part" value="FRONT INNER PANEL" /></div>
+        <div><label>Lot/회차</label><input id="lot" value="TRY-01" /></div>
+        <div><label>검사자</label><input id="inspector" value="품질팀" /></div>
+      </div>
+
+      <h3>금형 공법/공정 정보 (OP10 ~ OP50)</h3>
+      <div class="row">
+        <div><label>OP10 공정명</label><input id="op10Name" value="블랭킹" /></div>
+        <div><label>OP20 공정명</label><input id="op20Name" value="드로잉" /></div>
+        <div><label>OP30 공정명</label><input id="op30Name" value="트리밍" /></div>
+        <div><label>OP40 공정명</label><input id="op40Name" value="피어싱" /></div>
+        <div><label>OP50 공정명</label><input id="op50Name" value="플랜징" /></div>
+      </div>
+      <div class="row">
+        <div><label>OP10 설명 (예: 소재 컷팅/윤활조건)</label><textarea id="op10Desc"></textarea></div>
+        <div><label>OP20 설명</label><textarea id="op20Desc"></textarea></div>
+        <div><label>OP30 설명</label><textarea id="op30Desc"></textarea></div>
+        <div><label>OP40 설명</label><textarea id="op40Desc"></textarea></div>
+        <div><label>OP50 설명</label><textarea id="op50Desc"></textarea></div>
+      </div>
+
+      <div class="btn-row no-print">
+        <button id="saveBtn">현재 데이터 저장</button>
+        <button class="secondary" id="loadBtn">저장 데이터 불러오기</button>
+        <button class="danger" id="resetBtn">저장 데이터 초기화</button>
+      </div>
+      <p class="muted">브라우저 LocalStorage에 저장됩니다. (실서비스 시 DB/API로 교체)</p>
+    </section>
+
+    <section class="card">
+      <h2>2) 성적서 입력</h2>
+      <div class="row">
+        <div><label>항목명</label><input id="specName" placeholder="예: 플랜지 높이" /></div>
+        <div><label>기준값</label><input id="target" type="number" step="0.001" /></div>
+        <div><label>하한</label><input id="lower" type="number" step="0.001" /></div>
+        <div><label>상한</label><input id="upper" type="number" step="0.001" /></div>
+        <div><label>실측값</label><input id="measured" type="number" step="0.001" /></div>
+        <div><label>CTQ</label><select id="ctq"><option value="N">N</option><option value="Y">Y</option></select></div>
+      </div>
+      <div class="btn-row no-print">
+        <button id="addSpecBtn">항목 추가</button>
+        <button class="secondary" id="sampleBtn">샘플 데이터</button>
+        <button class="danger" id="clearSpecBtn">항목 전체 삭제</button>
+      </div>
+
+      <h3>성적서 CSV/엑셀 업로드</h3>
+      <p class="muted">지원 형식: .csv, .xlsx, .xls</p>
+      <p class="muted">권장 헤더: 항목명(GAP/FLUSH/HOLE), 기준값, LSL/USL, 실측(X1/X2...), ctq (동의어 자동 인식)</p>
+      <input class="no-print" id="specFile" type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" />
+      <div class="mapping-panel no-print" id="mappingPanel" style="display:none;">
+        <p class="muted" style="margin-top:0;">기존 성적서 헤더를 자동 인식했습니다. 틀리면 아래에서 직접 컬럼을 지정한 뒤 적용하세요.</p>
+        <div class="row">
+          <div><label>항목명 컬럼</label><select id="mapName"></select></div>
+          <div><label>기준값 컬럼</label><select id="mapTarget"></select></div>
+          <div><label>하한 컬럼</label><select id="mapLower"></select></div>
+          <div><label>상한 컬럼</label><select id="mapUpper"></select></div>
+          <div><label>실측값 컬럼</label><select id="mapMeasured"></select></div>
+          <div><label>CTQ 컬럼(없으면 비워도 됨)</label><select id="mapCtq"></select></div>
+        </div>
+        <div class="btn-row">
+          <button class="secondary" id="applyMappingBtn">매핑 적용 후 성적서 반영</button>
+        </div>
+      </div>
+
+      <table style="margin-top:10px;">
+        <thead><tr><th>항목</th><th>기준/공차</th><th>실측</th><th>CTQ</th><th>판정</th><th>편차</th></tr></thead>
+        <tbody id="specBody"></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>3) 3D 스캔 편차 입력 / CAD 미리보기</h2>
+      <div class="scan-layout">
+        <div>
+          <p class="muted">형식: 영역,편차(mm). 예) 좌측플랜지,0.35</p>
+          <textarea id="scanCsv">좌측플랜지,0.35
+코너부,-0.22
+스프링백영역,0.18</textarea>
+          <h3>스캔 편차 CSV 파일 업로드</h3>
+          <input class="no-print" id="scanFile" type="file" accept=".csv,text/csv" />
+          <h3>기준 CAD 파일 업로드</h3>
+          <input class="no-print" id="cadFile" type="file" accept=".stl,.obj,model/stl,text/plain" />
+          <p class="muted" id="cadFileInfo">현재 선택된 CAD 파일 없음</p>
+          <p class="muted" id="cadPreviewStatus">미리보기 상태: 대기</p>
+          <p class="muted" id="cadDebugInfo">디버그: -</p>
+          <div class="btn-row no-print">
+            <button id="analyzeBtn">통합 분석 실행</button>
+            <button class="secondary" id="printBtn">성적서(PDF) 출력</button>
+          </div>
+        </div>
+        <div>
+          <h3>CAD 이미지화(우측 미리보기)</h3>
+          <div class="viewer-box">
+            <canvas id="cadPreviewCanvas"></canvas>
+          </div>
+          <div class="btn-row no-print">
+            <button class="secondary" id="saveCadImageBtn">CAD 미리보기 이미지 저장(PNG)</button>
+            <button class="secondary" id="toggleHeatmapBtn">히트맵 보기: OFF</button>
+          </div>
+          <p class="muted">마우스로 회전/줌 가능하며, STL/OBJ 업로드 시 자동 표시됩니다.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="reportSection">
+      <h2>4) 분석 결과</h2>
+      <div class="kpi">
+        <div><span>성적서 OK 비율</span><strong id="kpiSpec">-</strong></div>
+        <div><span>3D 평균 편차</span><strong id="kpiAvg">-</strong></div>
+        <div><span>Lot 판정</span><strong id="kpiLot">-</strong></div>
+      </div>
+
+      <h3>수정 방향 제안</h3>
+      <ul id="recommendations"></ul>
+      <p class="muted">※ 룰 기반 초안입니다. 실제 금형 수정 전 담당자 승인 필요.</p>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/loaders/STLLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/loaders/OBJLoader.js"></script>
+  <script>
+    const STORAGE_KEY = 'inspectionPrototype.v2';
+    const specs = [];
+    let pendingSpecRows = [];
+    let pendingHeaders = [];
+    let selectedCadFileName = '';
+    let cadScene;
+    let cadCamera;
+    let cadRenderer;
+    let cadControls;
+    let cadMesh = null;
+    let heatmapEnabled = false;
+
+    const HEADER_ALIASES = {
+      name: ['항목명', '측정항목', '검사항목', 'spec', 'spec_name', 'name', 'item', 'gap', 'flush', 'hole'],
+      target: ['기준값', '기준', 'target', 'nominal', '기준치'],
+      lower: ['하한', '하한값', 'lsl', 'lower', 'min'],
+      upper: ['상한', '상한값', 'usl', 'upper', 'max'],
+      measured: ['실측값', '실측', '측정값', 'actual', 'result', '실적', 'x1', 'x2', 'x3', 'x4', 'x5'],
+      ctq: ['ctq', '중요특성', '중요도', 'critical']
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    function normalizeHeader(value) {
+      return String(value || '').toLowerCase().replace(/\s+/g, '').replace(/[_-]/g, '');
+    }
+
+    function pickField(row, key) {
+      const aliases = HEADER_ALIASES[key].map(normalizeHeader);
+      for (const originalKey of Object.keys(row)) {
+        const normalized = normalizeHeader(originalKey);
+        if (aliases.includes(normalized)) return row[originalKey];
+      }
+      return undefined;
+    }
+
+    function pickMeasuredValue(row) {
+      const direct = pickField(row, 'measured');
+      if (direct !== undefined && String(direct).trim() !== '') return direct;
+
+      const xValues = Object.keys(row)
+        .filter((k) => /^x\d+$/i.test(String(k).trim()))
+        .map((k) => Number(row[k]))
+        .filter((v) => Number.isFinite(v));
+
+      if (!xValues.length) return undefined;
+      const avg = xValues.reduce((a, b) => a + b, 0) / xValues.length;
+      return avg;
+    }
+
+    function detectColumn(headers, key) {
+      const aliases = HEADER_ALIASES[key].map(normalizeHeader);
+      return headers.find((header) => aliases.includes(normalizeHeader(header))) || '';
+    }
+
+    function buildSelect(id, headers, defaultValue = '') {
+      const select = $(id);
+      select.innerHTML = '';
+      const emptyOption = document.createElement('option');
+      emptyOption.value = '';
+      emptyOption.textContent = '(선택 안함)';
+      select.appendChild(emptyOption);
+      headers.forEach((header) => {
+        const option = document.createElement('option');
+        option.value = header;
+        option.textContent = header;
+        select.appendChild(option);
+      });
+      select.value = defaultValue && headers.includes(defaultValue) ? defaultValue : '';
+    }
+
+    function showMappingPanel(rows, headers) {
+      pendingSpecRows = rows;
+      pendingHeaders = headers;
+      $('mappingPanel').style.display = 'block';
+      buildSelect('mapName', headers, detectColumn(headers, 'name'));
+      buildSelect('mapTarget', headers, detectColumn(headers, 'target'));
+      buildSelect('mapLower', headers, detectColumn(headers, 'lower'));
+      buildSelect('mapUpper', headers, detectColumn(headers, 'upper'));
+      buildSelect('mapMeasured', headers, detectColumn(headers, 'measured'));
+      buildSelect('mapCtq', headers, detectColumn(headers, 'ctq'));
+    }
+
+    function formatNum(v) { return Number(v).toFixed(3); }
+
+    function judgeSpec(item) {
+      const ok = item.measured >= item.lower && item.measured <= item.upper;
+      const deviation = item.measured - item.target;
+      return { ok, deviation };
+    }
+
+    function renderSpecs() {
+      const body = $('specBody');
+      body.innerHTML = '';
+      specs.forEach((item) => {
+        const j = judgeSpec(item);
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${item.name}</td>
+          <td>${formatNum(item.target)} (${formatNum(item.lower)} ~ ${formatNum(item.upper)})</td>
+          <td>${formatNum(item.measured)}</td>
+          <td>${item.ctq}</td>
+          <td><span class="pill ${j.ok ? 'ok' : 'ng'}">${j.ok ? 'OK' : 'NOK'}</span></td>
+          <td>${j.deviation >= 0 ? '+' : ''}${formatNum(j.deviation)} mm</td>
+        `;
+        body.appendChild(tr);
+      });
+    }
+
+    function parseCsvLines(text, minColumns) {
+      return text.split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => line.split(',').map((x) => x.trim()))
+        .filter((arr) => arr.length >= minColumns);
+    }
+
+    function parseScanCsv(text) {
+      return parseCsvLines(text, 2)
+        .map(([zone, deviation]) => ({ zone, deviation: Number(deviation) }))
+        .filter((x) => x.zone && Number.isFinite(x.deviation));
+    }
+
+    function makeRecommendations(specRows, scanRows) {
+      const rec = [];
+      if (specRows.some((s) => s.ctq === 'Y' && !judgeSpec(s).ok)) {
+        rec.push('CTQ 불합격 항목 존재: 측정 신뢰성/셋업/금형 상태를 우선 점검하세요.');
+      }
+      scanRows.forEach((row) => {
+        if (row.zone.includes('플랜지') && row.deviation > 0.2) {
+          rec.push(`${row.zone} +${formatNum(row.deviation)}mm: 과성형 경향 → 압입/클리어런스 조정, 비드 강성 완화 검토.`);
+        }
+        if (row.zone.includes('코너') && row.deviation < -0.15) {
+          rec.push(`${row.zone} ${formatNum(row.deviation)}mm: 미성형 경향 → 유동성 개선 및 압력 밸런스 재조정 검토.`);
+        }
+        if (row.zone.includes('스프링백') && Math.abs(row.deviation) > 0.12) {
+          rec.push(`${row.zone} ${formatNum(row.deviation)}mm: 스프링백 편차 → 보정 오프셋 후보 비교 후 재트라이.`);
+        }
+      });
+      if (!rec.length) rec.push('큰 이상 패턴 없음: 현재 조건 유지 및 데이터 누적 권장.');
+      return rec;
+    }
+
+    function runAnalysis() {
+      const judged = specs.map((s) => ({ ...s, ...judgeSpec(s) }));
+      const passCount = judged.filter((x) => x.ok).length;
+      const specRatio = judged.length ? Math.round((passCount / judged.length) * 100) : 0;
+
+      const scanRows = parseScanCsv($('scanCsv').value);
+      const avgDeviation = scanRows.length
+        ? scanRows.reduce((acc, cur) => acc + cur.deviation, 0) / scanRows.length
+        : 0;
+
+      const lotFail = judged.some((x) => x.ctq === 'Y' && !x.ok)
+        || scanRows.some((x) => Math.abs(x.deviation) > 0.3);
+
+      $('kpiSpec').textContent = `${specRatio}%`;
+      $('kpiAvg').textContent = `${avgDeviation >= 0 ? '+' : ''}${formatNum(avgDeviation)} mm`;
+      $('kpiLot').textContent = lotFail ? 'NOK' : 'OK';
+      $('kpiLot').style.color = lotFail ? 'var(--ng)' : 'var(--ok)';
+
+      const recs = makeRecommendations(specs, scanRows);
+      $('recommendations').innerHTML = recs.map((x) => `<li>${x}</li>`).join('');
+    }
+
+
+
+    function setCadStatus(message) {
+      const el = $('cadPreviewStatus');
+      if (el) el.textContent = `미리보기 상태: ${message}`;
+    }
+
+    function setCadDebug(message) {
+      const el = $('cadDebugInfo');
+      if (el) el.textContent = `디버그: ${message}`;
+    }
+
+    function initCadPreview() {
+      const canvas = $('cadPreviewCanvas');
+      try {
+        cadRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+      } catch (error) {
+        console.error(error);
+        setCadStatus('WebGL 초기화 실패(브라우저 그래픽 설정 확인)');
+        return;
+      }
+      cadRenderer.setPixelRatio(window.devicePixelRatio || 1);
+      cadRenderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+
+      cadScene = new THREE.Scene();
+      cadScene.background = new THREE.Color(0x111827);
+
+      cadCamera = new THREE.PerspectiveCamera(45, canvas.clientWidth / canvas.clientHeight, 0.1, 10000);
+      cadCamera.position.set(160, 120, 160);
+
+      cadControls = new THREE.OrbitControls(cadCamera, canvas);
+      cadControls.enableDamping = true;
+      cadControls.dampingFactor = 0.06;
+
+      const hemi = new THREE.HemisphereLight(0xffffff, 0x223344, 1.0);
+      cadScene.add(hemi);
+      const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+      dir.position.set(100, 150, 100);
+      cadScene.add(dir);
+
+      const grid = new THREE.GridHelper(200, 20, 0x4b5563, 0x374151);
+      cadScene.add(grid);
+
+      function animate() {
+        requestAnimationFrame(animate);
+        if (!cadRenderer) return;
+        cadControls.update();
+        cadRenderer.render(cadScene, cadCamera);
+      }
+      animate();
+
+      window.addEventListener('resize', () => {
+        if (!cadRenderer || !cadCamera) return;
+        const w = canvas.clientWidth;
+        const h = canvas.clientHeight;
+        cadRenderer.setSize(w, h, false);
+        cadCamera.aspect = w / h;
+        cadCamera.updateProjectionMatrix();
+      });
+    }
+
+    function fitCameraToObject(object3d) {
+      const box = new THREE.Box3().setFromObject(object3d);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      const maxSize = Math.max(size.x, size.y, size.z) || 100;
+      const distance = maxSize * 2.2;
+
+      cadCamera.position.set(center.x + distance, center.y + distance * 0.7, center.z + distance);
+      cadCamera.near = maxSize / 100;
+      cadCamera.far = maxSize * 100;
+      cadCamera.updateProjectionMatrix();
+      cadControls.target.copy(center);
+      cadControls.update();
+    }
+
+
+    function applyHeatmapToGeometry(geometry) {
+      geometry.computeBoundingBox();
+      const box = geometry.boundingBox;
+      const minY = box.min.y;
+      const maxY = box.max.y;
+      const range = Math.max(maxY - minY, 1e-6);
+      const pos = geometry.attributes.position;
+      const colors = new Float32Array(pos.count * 3);
+
+      for (let i = 0; i < pos.count; i++) {
+        const y = pos.getY(i);
+        const t = Math.min(Math.max((y - minY) / range, 0), 1);
+        const color = new THREE.Color();
+        color.setHSL((1 - t) * 0.66, 1.0, 0.5); // blue->red
+        colors[i * 3] = color.r;
+        colors[i * 3 + 1] = color.g;
+        colors[i * 3 + 2] = color.b;
+      }
+
+      geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      return geometry;
+    }
+
+    function applyMaterialMode(root) {
+      root.traverse((child) => {
+        if (!child.isMesh) return;
+        if (heatmapEnabled && child.geometry?.attributes?.position) {
+          applyHeatmapToGeometry(child.geometry);
+          child.material = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.05, roughness: 0.65 });
+        } else {
+          child.material = new THREE.MeshStandardMaterial({ color: 0x60a5fa, metalness: 0.1, roughness: 0.6 });
+        }
+      });
+    }
+
+    function toggleHeatmapMode() {
+      heatmapEnabled = !heatmapEnabled;
+      $('toggleHeatmapBtn').textContent = `히트맵 보기: ${heatmapEnabled ? 'ON' : 'OFF'}`;
+      if (cadMesh) applyMaterialMode(cadMesh);
+    }
+
+    function loadCadToPreview(file) {
+      const ext = String(file.name.split('.').pop() || '').trim().toLowerCase();
+
+      if (!cadRenderer || !cadScene || !cadCamera) {
+        alert('CAD 뷰어가 초기화되지 않았습니다. 브라우저 하드웨어 가속(WebGL) 설정을 확인해주세요.');
+        setCadStatus('뷰어 미초기화(WebGL 확인)');
+        return;
+      }
+
+      const loadFromParsedObject = (parsed) => {
+        if (cadMesh) {
+          cadScene.remove(cadMesh);
+          cadMesh = null;
+        }
+        cadMesh = parsed;
+        applyMaterialMode(cadMesh);
+        cadScene.add(cadMesh);
+        fitCameraToObject(cadMesh);
+        setCadStatus(`표시 완료 (${file.name})`);
+        setCadDebug(`name=${file.name}, size=${Math.round(file.size/1024)}KB`);
+      };
+
+      const parseStl = (buffer) => {
+        const loader = new THREE.STLLoader();
+        const geometry = loader.parse(buffer);
+        return new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0x60a5fa, metalness: 0.1, roughness: 0.6 }));
+      };
+
+      const parseBinaryStlCustom = (buffer, littleEndian = true) => {
+        const view = new DataView(buffer);
+        if (view.byteLength < 84) throw new Error('STL buffer too small');
+        let triCount = view.getUint32(80, littleEndian);
+        const maxTrianglesByLength = Math.floor((view.byteLength - 84) / 50);
+        if (!Number.isFinite(triCount) || triCount <= 0 || triCount > maxTrianglesByLength) {
+          triCount = maxTrianglesByLength;
+        }
+        if (!triCount || triCount < 1) throw new Error('Invalid binary STL triangle count');
+
+        const positions = new Float32Array(triCount * 9);
+        const normals = new Float32Array(triCount * 9);
+        let offset = 84;
+        let v = 0;
+
+        for (let i = 0; i < triCount; i++) {
+          const nx = view.getFloat32(offset, littleEndian);
+          const ny = view.getFloat32(offset + 4, littleEndian);
+          const nz = view.getFloat32(offset + 8, littleEndian);
+          offset += 12;
+
+          for (let j = 0; j < 3; j++) {
+            const x = view.getFloat32(offset, littleEndian);
+            const y = view.getFloat32(offset + 4, littleEndian);
+            const z = view.getFloat32(offset + 8, littleEndian);
+            positions[v] = x; normals[v] = nx; v++;
+            positions[v] = y; normals[v] = ny; v++;
+            positions[v] = z; normals[v] = nz; v++;
+            offset += 12;
+          }
+          offset += 2;
+        }
+
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+        geometry.computeBoundingSphere();
+        return new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0x60a5fa, metalness: 0.1, roughness: 0.6 }));
+      };
+
+      const parseAsciiStlCustom = (text) => {
+        const normalizedText = String(text || '')
+          .replace(/([0-9]),([0-9])/g, '$1.$2')
+          .replace(/\r/g, '\n');
+        const vertexRegex = /vertex\s+([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)\s+([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)\s+([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)/gi;
+        const vertices = [];
+        let m;
+        while ((m = vertexRegex.exec(normalizedText)) !== null) {
+          vertices.push(parseFloat(m[1]), parseFloat(m[2]), parseFloat(m[3]));
+        }
+        if (vertices.length < 9) throw new Error('ASCII STL vertices not found');
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+        geometry.computeVertexNormals();
+        geometry.computeBoundingSphere();
+        return new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0x60a5fa, metalness: 0.1, roughness: 0.6 }));
+      };
+
+      const parseObj = (text) => {
+        const loader = new THREE.OBJLoader();
+        return loader.parse(String(text || ''));
+      };
+
+      setCadStatus(`파일 로드 중 (${file.name})`);
+
+      if (ext === 'stl') {
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            loadFromParsedObject(parseStl(reader.result));
+          } catch (primaryError) {
+            try {
+              loadFromParsedObject(parseBinaryStlCustom(reader.result, true));
+              setCadStatus(`표시 완료(커스텀 Binary LE) (${file.name})`);
+            } catch (binaryFallbackError) {
+              try {
+                loadFromParsedObject(parseBinaryStlCustom(reader.result, false));
+                setCadStatus(`표시 완료(커스텀 Binary BE) (${file.name})`);
+              } catch (binaryBigError) {
+                try {
+                  const text = new TextDecoder('utf-8', { fatal: false }).decode(reader.result);
+                  loadFromParsedObject(parseAsciiStlCustom(text));
+                  setCadStatus(`표시 완료(커스텀 ASCII 파서-buffer) (${file.name})`);
+                } catch (asciiBufferError) {
+                  file.text().then((rawText) => {
+                    try {
+                      loadFromParsedObject(parseAsciiStlCustom(rawText));
+                      setCadStatus(`표시 완료(커스텀 ASCII 파서-file.text) (${file.name})`);
+                    } catch (asciiTextError) {
+                      console.error('STL primary parse error:', primaryError);
+                      console.error('STL binary LE fallback error:', binaryFallbackError);
+                      console.error('STL binary BE fallback error:', binaryBigError);
+                      console.error('STL ascii buffer fallback error:', asciiBufferError);
+                      console.error('STL ascii file.text fallback error:', asciiTextError);
+                      const sizeKB = Math.round(file.size / 1024);
+                      setCadDebug(`name=${file.name}, size=${sizeKB}KB, last=STL all parser failed`);
+                      alert('STL 파싱 실패: 브라우저에서 지원하기 어려운 변형 STL일 수 있습니다. 동일 파일을 OBJ로 변환하거나, 테스트용으로 간단한 STL로 먼저 확인해주세요.');
+                      setCadStatus(`로드 실패(STL all parser) (${file.name})`);
+                    }
+                  }).catch((textReadError) => {
+                    console.error('STL text read error:', textReadError);
+                    setCadDebug(`name=${file.name}, file.text() read error`);
+                    alert('STL 파싱 실패: 파일 텍스트 재읽기에도 실패했습니다. 브라우저/파일 권한을 확인해주세요.');
+                    setCadStatus(`로드 실패(STL text read) (${file.name})`);
+                  });
+                }
+              }
+            }
+          }
+        };
+        reader.onerror = () => {
+          setCadStatus(`로드 실패(파일 읽기 오류) (${file.name})`);
+          alert('STL 파일을 읽는 중 I/O 오류가 발생했습니다.');
+        };
+        reader.readAsArrayBuffer(file);
+        return;
+      }
+
+      if (ext === 'obj') {
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            loadFromParsedObject(parseObj(reader.result));
+          } catch (objError) {
+            console.error(objError);
+            setCadStatus(`로드 실패(OBJ 파싱) (${file.name})`);
+            alert('OBJ 파싱 실패: 파일 손상 또는 포맷 문제가 있을 수 있습니다.');
+          }
+        };
+        reader.onerror = () => {
+          setCadStatus(`로드 실패(파일 읽기 오류) (${file.name})`);
+          alert('OBJ 파일을 읽는 중 I/O 오류가 발생했습니다.');
+        };
+        reader.readAsText(file, 'utf-8');
+        return;
+      }
+
+      alert('CAD 미리보기는 .stl / .obj만 지원합니다.');
+      setCadStatus('지원하지 않는 확장자');
+    }
+
+    function saveCadPreviewImage() {
+      if (!cadRenderer) {
+        alert('CAD 미리보기가 초기화되지 않아 이미지를 저장할 수 없습니다.');
+        return;
+      }
+      const link = document.createElement('a');
+      link.download = `cad-preview-${Date.now()}.png`;
+      link.href = cadRenderer.domElement.toDataURL('image/png');
+      link.click();
+    }
+
+    function setCadFileName(name) {
+      selectedCadFileName = name || '';
+      $('cadFileInfo').textContent = selectedCadFileName
+        ? `선택된 CAD 파일: ${selectedCadFileName}`
+        : '현재 선택된 CAD 파일 없음';
+    }
+
+    function saveData() {
+      const payload = {
+        model: $('model').value,
+        part: $('part').value,
+        lot: $('lot').value,
+        inspector: $('inspector').value,
+        processPlan: {
+          op10: { name: $('op10Name').value, desc: $('op10Desc').value },
+          op20: { name: $('op20Name').value, desc: $('op20Desc').value },
+          op30: { name: $('op30Name').value, desc: $('op30Desc').value },
+          op40: { name: $('op40Name').value, desc: $('op40Desc').value },
+          op50: { name: $('op50Name').value, desc: $('op50Desc').value },
+        },
+        scanCsv: $('scanCsv').value,
+        cadFileName: selectedCadFileName,
+        specs,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      alert('저장 완료');
+    }
+
+    function loadData() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) { alert('저장된 데이터가 없습니다.'); return; }
+      const data = JSON.parse(raw);
+      $('model').value = data.model || '';
+      $('part').value = data.part || '';
+      $('lot').value = data.lot || '';
+      $('inspector').value = data.inspector || '';
+      const pp = data.processPlan || {};
+      $('op10Name').value = pp.op10?.name || $('op10Name').value;
+      $('op20Name').value = pp.op20?.name || $('op20Name').value;
+      $('op30Name').value = pp.op30?.name || $('op30Name').value;
+      $('op40Name').value = pp.op40?.name || $('op40Name').value;
+      $('op50Name').value = pp.op50?.name || $('op50Name').value;
+      $('op10Desc').value = pp.op10?.desc || '';
+      $('op20Desc').value = pp.op20?.desc || '';
+      $('op30Desc').value = pp.op30?.desc || '';
+      $('op40Desc').value = pp.op40?.desc || '';
+      $('op50Desc').value = pp.op50?.desc || '';
+      $('scanCsv').value = data.scanCsv || '';
+      setCadFileName(data.cadFileName || '');
+      specs.splice(0, specs.length, ...(data.specs || []));
+      renderSpecs();
+      runAnalysis();
+      alert('불러오기 완료');
+    }
+
+    function resetSavedData() {
+      localStorage.removeItem(STORAGE_KEY);
+      setCadFileName('');
+      alert('저장 데이터가 삭제되었습니다.');
+    }
+
+    function addSpecRow(row) {
+      const invalid = !row.name || [row.target, row.lower, row.upper, row.measured].some((v) => !Number.isFinite(v));
+      if (!invalid) specs.push(row);
+    }
+
+    function toSpecRow(raw) {
+      const normalizedCtq = String(raw.ctq || 'N').trim().toUpperCase();
+      let lower = Number(raw.lower);
+      let upper = Number(raw.upper);
+      if (Number.isFinite(lower) && Number.isFinite(upper) && lower > upper) {
+        [lower, upper] = [upper, lower];
+      }
+      return {
+        name: String(raw.name || '').trim(),
+        target: Number(raw.target),
+        lower,
+        upper,
+        measured: Number(raw.measured),
+        ctq: normalizedCtq === 'Y' || normalizedCtq === '1' || normalizedCtq === 'TRUE' ? 'Y' : 'N',
+      };
+    }
+
+    function appendSpecRows(rows) {
+      let loaded = 0;
+      rows.forEach((raw) => {
+        const before = specs.length;
+        addSpecRow(toSpecRow(raw));
+        if (specs.length > before) loaded += 1;
+      });
+      renderSpecs();
+      runAnalysis();
+      return loaded;
+    }
+
+    function parseSpecCsvToObjects(text) {
+      const rows = parseCsvLines(text, 2);
+      if (!rows.length) return { rows: [], headers: [] };
+
+      const firstRow = rows[0];
+      const hasHeader = firstRow.some((cell) => Number.isNaN(Number(cell)));
+      if (hasHeader) {
+        const headers = firstRow.map((x, idx) => String(x || '').trim() || `컬럼${idx + 1}`);
+        const objects = rows.slice(1).map((cols) => {
+          const obj = {};
+          headers.forEach((key, idx) => { obj[key] = cols[idx] ?? ''; });
+          return obj;
+        });
+        return { rows: objects, headers };
+      }
+
+      const headers = firstRow.map((_, idx) => `컬럼${idx + 1}`);
+      const objects = rows.map((cols) => {
+        const obj = {};
+        headers.forEach((key, idx) => { obj[key] = cols[idx] ?? ''; });
+        return obj;
+      });
+      return { rows: objects, headers };
+    }
+
+    function parseSpecWorkbookToObjects(buffer) {
+      const wb = XLSX.read(buffer, { type: 'array' });
+      const firstSheet = wb.Sheets[wb.SheetNames[0]];
+      const rowsByHeader = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
+      if (rowsByHeader.length) {
+        const headers = Array.from(rowsByHeader.reduce((set, row) => {
+          Object.keys(row).forEach((k) => set.add(k));
+          return set;
+        }, new Set()));
+        return { rows: rowsByHeader, headers };
+      }
+
+      const matrix = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
+      const headers = (matrix[0] || []).map((x, idx) => String(x || '').trim() || `컬럼${idx + 1}`);
+      const rows = matrix.slice(1).map((line) => {
+        const obj = {};
+        headers.forEach((key, idx) => { obj[key] = line[idx] ?? ''; });
+        return obj;
+      });
+      return { rows, headers };
+    }
+
+    function applyMappingAndLoad() {
+      if (!pendingSpecRows.length || !pendingHeaders.length) {
+        alert('먼저 성적서 파일을 업로드해주세요.');
+        return;
+      }
+      const mapping = {
+        name: $('mapName').value,
+        target: $('mapTarget').value,
+        lower: $('mapLower').value,
+        upper: $('mapUpper').value,
+        measured: $('mapMeasured').value,
+        ctq: $('mapCtq').value,
+      };
+
+      if (!mapping.name || !mapping.target || !mapping.lower || !mapping.upper || !mapping.measured) {
+        alert('항목명/기준값/하한/상한/실측값 컬럼은 반드시 지정해야 합니다.');
+        return;
+      }
+
+      const mappedRows = pendingSpecRows.map((row) => ({
+        name: row[mapping.name],
+        target: row[mapping.target],
+        lower: row[mapping.lower],
+        upper: row[mapping.upper],
+        measured: row[mapping.measured],
+        ctq: mapping.ctq ? row[mapping.ctq] : 'N',
+      }));
+
+      const loaded = appendSpecRows(mappedRows);
+      alert(`성적서 반영 완료: ${loaded}건`);
+      $('mappingPanel').style.display = 'none';
+    }
+
+    function handleSpecFile(file) {
+      const isExcel = /\.(xlsx|xls)$/i.test(file.name);
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          setCadStatus(`파일 로드 중 (${file.name})`);
+          const parsed = isExcel
+            ? parseSpecWorkbookToObjects(reader.result)
+            : parseSpecCsvToObjects(String(reader.result || ''));
+
+          if (!parsed.rows.length) {
+            alert('성적서 파일에서 데이터 행을 찾지 못했습니다.');
+            return;
+          }
+
+          showMappingPanel(parsed.rows, parsed.headers);
+
+          const autoMappedRows = parsed.rows.map((row) => ({
+            name: pickField(row, 'name'),
+            target: pickField(row, 'target'),
+            lower: pickField(row, 'lower'),
+            upper: pickField(row, 'upper'),
+            measured: pickMeasuredValue(row),
+            ctq: pickField(row, 'ctq') || 'N',
+          }));
+
+          const essentialReady = autoMappedRows.some((r) => r.name && r.target !== undefined && r.lower !== undefined && r.upper !== undefined && r.measured !== undefined);
+          if (essentialReady) {
+            const loaded = appendSpecRows(autoMappedRows);
+            alert(`${isExcel ? '엑셀' : 'CSV'} 자동 인식 반영 완료: ${loaded}건\n(필요하면 컬럼 매핑을 수정 후 다시 반영하세요)`);
+          } else {
+            alert('자동 인식이 어려워 컬럼 매핑 패널을 열었습니다. 컬럼을 지정한 뒤 반영하세요.');
+          }
+        } catch (error) {
+          console.error(error);
+          alert('성적서 파일 파싱 중 오류가 발생했습니다. 헤더명을 확인해주세요.');
+        }
+      };
+      if (isExcel) reader.readAsArrayBuffer(file);
+      else reader.readAsText(file, 'utf-8');
+    }
+
+    function handleScanFile(file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        $('scanCsv').value = String(reader.result || '');
+        runAnalysis();
+        alert('스캔 편차 CSV 반영 완료');
+      };
+      reader.readAsText(file, 'utf-8');
+    }
+
+    $('addSpecBtn').addEventListener('click', () => {
+      const row = {
+        name: $('specName').value.trim(),
+        target: Number($('target').value),
+        lower: Number($('lower').value),
+        upper: Number($('upper').value),
+        measured: Number($('measured').value),
+        ctq: $('ctq').value,
+      };
+      const before = specs.length;
+      addSpecRow(row);
+      if (specs.length === before) { alert('입력값을 확인해주세요.'); return; }
+      renderSpecs();
+    });
+
+    $('clearSpecBtn').addEventListener('click', () => {
+      specs.splice(0, specs.length);
+      renderSpecs();
+      runAnalysis();
+    });
+
+    $('sampleBtn').addEventListener('click', () => {
+      specs.splice(0, specs.length,
+        { name: '플랜지 높이', target: 10.0, lower: 9.8, upper: 10.2, measured: 10.31, ctq: 'Y' },
+        { name: '홀 간격', target: 120.0, lower: 119.8, upper: 120.2, measured: 120.05, ctq: 'N' },
+        { name: '코너 R', target: 3.0, lower: 2.9, upper: 3.1, measured: 2.82, ctq: 'Y' }
+      );
+      $('scanCsv').value = '좌측플랜지,0.35\n코너부,-0.22\n스프링백영역,0.18';
+      $('op10Desc').value = '블랭킹 금형으로 소재 형상 컷팅, 버어 방향 확인';
+      $('op20Desc').value = '드로잉 성형, 유입량/윤활량 조건 점검';
+      $('op30Desc').value = '외곽 트리밍 및 스크랩 배출 상태 확인';
+      $('op40Desc').value = '피어싱 홀 위치/직경 공차 확인';
+      $('op50Desc').value = '플랜징 각도 및 스프링백 경향 보정';
+      renderSpecs();
+      runAnalysis();
+    });
+
+    $('analyzeBtn').addEventListener('click', runAnalysis);
+    $('printBtn').addEventListener('click', () => window.print());
+    $('saveBtn').addEventListener('click', saveData);
+    $('loadBtn').addEventListener('click', loadData);
+    $('resetBtn').addEventListener('click', resetSavedData);
+
+    $('specFile').addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (file) handleSpecFile(file);
+      e.target.value = '';
+    });
+
+    $('applyMappingBtn').addEventListener('click', applyMappingAndLoad);
+
+    $('scanFile').addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (file) handleScanFile(file);
+      e.target.value = '';
+    });
+
+    $('cadFile').addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (file) {
+        const valid = /\.(stl|obj)$/i.test(file.name);
+        if (!valid) {
+          alert('기준 CAD 파일은 .stl 또는 .obj 형식을 권장합니다.');
+          setCadStatus('확장자 확인 필요 (.stl/.obj)');
+          e.target.value = '';
+          return;
+        }
+        setCadFileName(file.name);
+        loadCadToPreview(file);
+      }
+      e.target.value = '';
+    });
+
+    $('saveCadImageBtn').addEventListener('click', saveCadPreviewImage);
+    $('toggleHeatmapBtn').addEventListener('click', toggleHeatmapMode);
+
+    initCadPreview();
+    $('sampleBtn').click();
+    setCadFileName('');
+    setCadStatus('대기');
+    setCadDebug('-');
+  </script>
+</body>
+</html>

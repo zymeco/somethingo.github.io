@@ -1,0 +1,23 @@
+{
+  "appId": "com.somethingo.inspection",
+  "productName": "Inspection Prototype",
+  "files": [
+    "index.html",
+    "README.md",
+    "inspection-system-plan.md",
+    "electron/**/*"
+  ],
+  "directories": {
+    "output": "dist"
+  },
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      }
+    ]
+  }
+}
