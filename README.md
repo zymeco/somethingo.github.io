@@ -1,42 +1,86 @@
 # 초도제품 검사 프로토타입 실행 방법
 
-실행이 안 될 때 가장 먼저 **`index.html`을 더블클릭으로 열지 말고**, 로컬 서버로 열어주세요.
+이번 프로젝트는 **정적 웹 페이지(`index.html`)** 이라 설치 없이 브라우저로 실행할 수 있습니다.
+다만 `file://` 로 더블클릭 실행보다 **로컬 서버 실행**을 권장합니다.
 
-## 방법 1) Python으로 실행 (권장)
+---
+
+## 1) Windows (PowerShell)에서 실행
+
+### 1-1. 먼저 폴더 위치 확인
+`/workspace/somethingo.github.io` 는 이 개발 컨테이너 경로라서, Windows에서는 존재하지 않습니다.
+PowerShell에서는 실제 PC 경로로 이동해야 합니다.
+
+예시:
+```powershell
+cd C:\Users\ZYMECO\Downloads\somethingo.github.io
+```
+
+> 현재 `C:\Users\ZYMECO\Downloads` 에 계시므로, 먼저 `somethingo.github.io` 폴더를 해당 위치에 내려받아(또는 압축 해제) 두셔야 합니다.
+
+### 1-2. Python으로 실행 (가장 쉬움)
+Windows에서는 `python3` 대신 `py`가 더 잘 동작하는 경우가 많습니다.
+
+```powershell
+py -m http.server 4173
+```
+
+브라우저에서 접속:
+- `http://localhost:4173`
+
+정상이라면 터미널에 아래와 비슷하게 나옵니다:
+- `Serving HTTP on 0.0.0.0 port 4173 ...`
+
+### 1-3. 포트 충돌 시
+```powershell
+py -m http.server 5173
+```
+접속: `http://localhost:5173`
+
+---
+
+## 2) macOS / Linux 실행
 ```bash
-cd /workspace/somethingo.github.io
+cd /path/to/somethingo.github.io
 python3 -m http.server 4173
 ```
-브라우저에서 `http://localhost:4173` 접속.
+접속: `http://localhost:4173`
 
-## 방법 2) Node로 실행
+---
+
+## 3) Node 방식 실행(선택)
+Node가 설치된 경우만 사용하세요.
+
 ```bash
-cd /workspace/somethingo.github.io
 npm start
 ```
-브라우저에서 `http://localhost:4173` 접속.
 
-## 실행 확인 체크
-- 페이지 상단 제목이 `초도제품 검사 · 스펙 비교 · 수정방향 제안` 으로 보이면 정상.
-- `샘플 데이터` 버튼 클릭 후 `통합 분석 실행` 시 KPI와 추천 문구가 표시되면 정상.
+- 기본 포트: `4173`
+- 포트 변경: `PORT=5173 npm start`
 
-## 자주 발생하는 문제
-1. **포트 충돌(4173 이미 사용 중)**
-   - 에러가 나면 다른 포트로 실행:
-   ```bash
-   python3 -m http.server 5173
-   ```
-   또는
-   ```bash
-   PORT=5173 npm start
-   ```
+### Windows에서 `npm : CommandNotFoundException` 발생 시
+이는 Node.js가 설치되지 않았거나 PATH에 등록되지 않은 상태입니다.
+- Node 없이도 **Python 방식으로 바로 실행 가능**합니다 (`py -m http.server 4173`).
 
-2. **브라우저 캐시로 예전 페이지가 보임**
-   - 강력 새로고침: `Ctrl+Shift+R` (Mac: `Cmd+Shift+R`).
+---
 
-3. **저장/불러오기 동작 안 함**
-   - 시크릿 모드/보안 정책에서 LocalStorage가 막힌 경우가 있어 일반 창에서 접속하세요.
+## 4) 실행 확인 체크
+- 페이지 상단 제목이 `초도제품 검사 · 스펙 비교 · 수정방향 제안`으로 보이면 정상.
+- `샘플 데이터` 클릭 후 `통합 분석 실행` 시 KPI/추천 문구가 표시되면 정상.
 
-4. **CSV 업로드가 반영되지 않음**
-   - 성적서 CSV 컬럼 순서를 아래와 같이 맞추세요:
+---
+
+## 5) 자주 발생하는 문제
+1. **경로 오류**
+   - `/workspace/...` 는 Windows 경로가 아닙니다.
+   - `C:\Users\...` 형태의 실제 폴더로 이동하세요.
+
+2. **브라우저 캐시로 예전 화면 표시**
+   - 강력 새로고침: `Ctrl+Shift+R` (Mac: `Cmd+Shift+R`)
+
+3. **저장/불러오기 미동작**
+   - 시크릿 모드/회사 보안 정책에서 LocalStorage가 막힌 경우가 있으니 일반 창에서 실행하세요.
+
+4. **CSV 업로드 미반영**
+   - 성적서 CSV 컬럼 순서:
    - `항목명,target,lower,upper,measured,ctq`
