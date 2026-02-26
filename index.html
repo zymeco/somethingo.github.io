@@ -147,6 +147,7 @@
           </div>
           <div class="btn-row no-print">
             <button class="secondary" id="saveCadImageBtn">CAD 미리보기 이미지 저장(PNG)</button>
+            <button class="secondary" id="toggleHeatmapBtn">히트맵 보기: OFF</button>
           </div>
           <p class="muted">마우스로 회전/줌 가능하며, STL/OBJ 업로드 시 자동 표시됩니다.</p>
         </div>
@@ -183,6 +184,7 @@
     let cadRenderer;
     let cadControls;
     let cadMesh = null;
+    let heatmapEnabled = false;
 
     const HEADER_ALIASES = {
       name: ['항목명', '측정항목', '검사항목', 'spec', 'spec_name', 'name', 'item'],
@@ -381,6 +383,48 @@
       cadControls.update();
     }
 
+
+    function applyHeatmapToGeometry(geometry) {
+      geometry.computeBoundingBox();
+      const box = geometry.boundingBox;
+      const minY = box.min.y;
+      const maxY = box.max.y;
+      const range = Math.max(maxY - minY, 1e-6);
+      const pos = geometry.attributes.position;
+      const colors = new Float32Array(pos.count * 3);
+
+      for (let i = 0; i < pos.count; i++) {
+        const y = pos.getY(i);
+        const t = Math.min(Math.max((y - minY) / range, 0), 1);
+        const color = new THREE.Color();
+        color.setHSL((1 - t) * 0.66, 1.0, 0.5); // blue->red
+        colors[i * 3] = color.r;
+        colors[i * 3 + 1] = color.g;
+        colors[i * 3 + 2] = color.b;
+      }
+
+      geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      return geometry;
+    }
+
+    function applyMaterialMode(root) {
+      root.traverse((child) => {
+        if (!child.isMesh) return;
+        if (heatmapEnabled && child.geometry?.attributes?.position) {
+          applyHeatmapToGeometry(child.geometry);
+          child.material = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.05, roughness: 0.65 });
+        } else {
+          child.material = new THREE.MeshStandardMaterial({ color: 0x60a5fa, metalness: 0.1, roughness: 0.6 });
+        }
+      });
+    }
+
+    function toggleHeatmapMode() {
+      heatmapEnabled = !heatmapEnabled;
+      $('toggleHeatmapBtn').textContent = `히트맵 보기: ${heatmapEnabled ? 'ON' : 'OFF'}`;
+      if (cadMesh) applyMaterialMode(cadMesh);
+    }
+
     function loadCadToPreview(file) {
       const ext = (file.name.split('.').pop() || '').toLowerCase();
       const reader = new FileReader();
@@ -394,20 +438,15 @@
 
           if (ext === 'stl') {
             const geometry = new THREE.STLLoader().parse(reader.result);
-            const material = new THREE.MeshStandardMaterial({ color: 0x60a5fa, metalness: 0.1, roughness: 0.6 });
-            cadMesh = new THREE.Mesh(geometry, material);
+            cadMesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0x60a5fa, metalness: 0.1, roughness: 0.6 }));
           } else if (ext === 'obj') {
             cadMesh = new THREE.OBJLoader().parse(String(reader.result || ''));
-            cadMesh.traverse((child) => {
-              if (child.isMesh) {
-                child.material = new THREE.MeshStandardMaterial({ color: 0x60a5fa, metalness: 0.1, roughness: 0.6 });
-              }
-            });
           } else {
             alert('CAD 미리보기는 .stl / .obj만 지원합니다.');
             return;
           }
 
+          applyMaterialMode(cadMesh);
           cadScene.add(cadMesh);
           fitCameraToObject(cadMesh);
         } catch (e) {
@@ -698,6 +737,7 @@
     });
 
     $('saveCadImageBtn').addEventListener('click', saveCadPreviewImage);
+    $('toggleHeatmapBtn').addEventListener('click', toggleHeatmapMode);
 
     initCadPreview();
     $('sampleBtn').click();
