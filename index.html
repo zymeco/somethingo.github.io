@@ -153,6 +153,7 @@
           <input class="no-print" id="cadFile" type="file" accept=".stl,.obj,model/stl,text/plain" />
           <p class="muted" id="cadFileInfo">현재 선택된 CAD 파일 없음</p>
           <p class="muted" id="cadPreviewStatus">미리보기 상태: 대기</p>
+          <p class="muted" id="cadDebugInfo">디버그: -</p>
           <div class="btn-row no-print">
             <button id="analyzeBtn">통합 분석 실행</button>
             <button class="secondary" id="printBtn">성적서(PDF) 출력</button>
@@ -364,6 +365,11 @@
       if (el) el.textContent = `미리보기 상태: ${message}`;
     }
 
+    function setCadDebug(message) {
+      const el = $('cadDebugInfo');
+      if (el) el.textContent = `디버그: ${message}`;
+    }
+
     function initCadPreview() {
       const canvas = $('cadPreviewCanvas');
       try {
@@ -489,6 +495,7 @@
         cadScene.add(cadMesh);
         fitCameraToObject(cadMesh);
         setCadStatus(`표시 완료 (${file.name})`);
+        setCadDebug(`name=${file.name}, size=${Math.round(file.size/1024)}KB`);
       };
 
       const parseStl = (buffer) => {
@@ -497,10 +504,10 @@
         return new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0x60a5fa, metalness: 0.1, roughness: 0.6 }));
       };
 
-      const parseBinaryStlCustom = (buffer) => {
+      const parseBinaryStlCustom = (buffer, littleEndian = true) => {
         const view = new DataView(buffer);
         if (view.byteLength < 84) throw new Error('STL buffer too small');
-        let triCount = view.getUint32(80, true);
+        let triCount = view.getUint32(80, littleEndian);
         const maxTrianglesByLength = Math.floor((view.byteLength - 84) / 50);
         if (!Number.isFinite(triCount) || triCount <= 0 || triCount > maxTrianglesByLength) {
           triCount = maxTrianglesByLength;
@@ -513,15 +520,15 @@
         let v = 0;
 
         for (let i = 0; i < triCount; i++) {
-          const nx = view.getFloat32(offset, true);
-          const ny = view.getFloat32(offset + 4, true);
-          const nz = view.getFloat32(offset + 8, true);
+          const nx = view.getFloat32(offset, littleEndian);
+          const ny = view.getFloat32(offset + 4, littleEndian);
+          const nz = view.getFloat32(offset + 8, littleEndian);
           offset += 12;
 
           for (let j = 0; j < 3; j++) {
-            const x = view.getFloat32(offset, true);
-            const y = view.getFloat32(offset + 4, true);
-            const z = view.getFloat32(offset + 8, true);
+            const x = view.getFloat32(offset, littleEndian);
+            const y = view.getFloat32(offset + 4, littleEndian);
+            const z = view.getFloat32(offset + 8, littleEndian);
             positions[v] = x; normals[v] = nx; v++;
             positions[v] = y; normals[v] = ny; v++;
             positions[v] = z; normals[v] = nz; v++;
@@ -569,31 +576,40 @@
             loadFromParsedObject(parseStl(reader.result));
           } catch (primaryError) {
             try {
-              loadFromParsedObject(parseBinaryStlCustom(reader.result));
-              setCadStatus(`표시 완료(커스텀 Binary 파서) (${file.name})`);
+              loadFromParsedObject(parseBinaryStlCustom(reader.result, true));
+              setCadStatus(`표시 완료(커스텀 Binary LE) (${file.name})`);
             } catch (binaryFallbackError) {
               try {
-                const text = new TextDecoder('utf-8', { fatal: false }).decode(reader.result);
-                loadFromParsedObject(parseAsciiStlCustom(text));
-                setCadStatus(`표시 완료(커스텀 ASCII 파서-buffer) (${file.name})`);
-              } catch (asciiBufferError) {
-                file.text().then((rawText) => {
-                  try {
-                    loadFromParsedObject(parseAsciiStlCustom(rawText));
-                    setCadStatus(`표시 완료(커스텀 ASCII 파서-file.text) (${file.name})`);
-                  } catch (asciiTextError) {
-                    console.error('STL primary parse error:', primaryError);
-                    console.error('STL binary fallback error:', binaryFallbackError);
-                    console.error('STL ascii buffer fallback error:', asciiBufferError);
-                    console.error('STL ascii file.text fallback error:', asciiTextError);
-                    alert('STL 파싱 실패: 파일 포맷 변형이 큰 케이스일 수 있습니다. 파일이 정상이라면 CAD에서 STL을 다시 저장(ASCII/Binary 전환)하거나 OBJ로 변환해서 업로드해주세요.');
-                    setCadStatus(`로드 실패(STL 파싱) (${file.name})`);
-                  }
-                }).catch((textReadError) => {
-                  console.error('STL text read error:', textReadError);
-                  alert('STL 파싱 실패: 파일 텍스트 재읽기에도 실패했습니다. 브라우저/파일 권한을 확인해주세요.');
-                  setCadStatus(`로드 실패(STL text read) (${file.name})`);
-                });
+                loadFromParsedObject(parseBinaryStlCustom(reader.result, false));
+                setCadStatus(`표시 완료(커스텀 Binary BE) (${file.name})`);
+              } catch (binaryBigError) {
+                try {
+                  const text = new TextDecoder('utf-8', { fatal: false }).decode(reader.result);
+                  loadFromParsedObject(parseAsciiStlCustom(text));
+                  setCadStatus(`표시 완료(커스텀 ASCII 파서-buffer) (${file.name})`);
+                } catch (asciiBufferError) {
+                  file.text().then((rawText) => {
+                    try {
+                      loadFromParsedObject(parseAsciiStlCustom(rawText));
+                      setCadStatus(`표시 완료(커스텀 ASCII 파서-file.text) (${file.name})`);
+                    } catch (asciiTextError) {
+                      console.error('STL primary parse error:', primaryError);
+                      console.error('STL binary LE fallback error:', binaryFallbackError);
+                      console.error('STL binary BE fallback error:', binaryBigError);
+                      console.error('STL ascii buffer fallback error:', asciiBufferError);
+                      console.error('STL ascii file.text fallback error:', asciiTextError);
+                      const sizeKB = Math.round(file.size / 1024);
+                      setCadDebug(`name=${file.name}, size=${sizeKB}KB, last=STL all parser failed`);
+                      alert('STL 파싱 실패: 브라우저에서 지원하기 어려운 변형 STL일 수 있습니다. 동일 파일을 OBJ로 변환하거나, 테스트용으로 간단한 STL로 먼저 확인해주세요.');
+                      setCadStatus(`로드 실패(STL all parser) (${file.name})`);
+                    }
+                  }).catch((textReadError) => {
+                    console.error('STL text read error:', textReadError);
+                    setCadDebug(`name=${file.name}, file.text() read error`);
+                    alert('STL 파싱 실패: 파일 텍스트 재읽기에도 실패했습니다. 브라우저/파일 권한을 확인해주세요.');
+                    setCadStatus(`로드 실패(STL text read) (${file.name})`);
+                  });
+                }
               }
             }
           }
@@ -947,6 +963,7 @@
     $('sampleBtn').click();
     setCadFileName('');
     setCadStatus('대기');
+    setCadDebug('-');
   </script>
 </body>
 </html>
