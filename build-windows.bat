@@ -1,11 +1,32 @@
 @echo off
+setlocal
 cd /d %~dp0
+
+echo [INFO] Building Windows app package...
 
 where npm >nul 2>nul
 if %errorlevel% neq 0 (
-  echo [ERROR] npm not found. Please install Node.js LTS first.
+  echo [WARN] npm not found. Trying to install Node.js LTS automatically...
+
+  where winget >nul 2>nul
+  if %errorlevel% neq 0 (
+    echo [ERROR] winget not found, so Node.js auto-install is not available.
+    echo         Please install Node.js LTS manually: https://nodejs.org
+    pause
+    exit /b 1
+  )
+
+  winget install -e --id OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements
+  if %errorlevel% neq 0 (
+    echo [ERROR] Node.js auto-install failed.
+    echo         Please install Node.js LTS manually: https://nodejs.org
+    pause
+    exit /b 1
+  )
+
+  echo [INFO] Node.js installed. Please close this window and run build-windows.bat again.
   pause
-  exit /b 1
+  exit /b 0
 )
 
 echo [1/2] Installing dependencies...
@@ -26,3 +47,4 @@ if %errorlevel% neq 0 (
 
 echo Build completed. Check dist folder.
 pause
+exit /b 0

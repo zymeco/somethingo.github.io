@@ -6,8 +6,14 @@
 웹 브라우저 대신 **윈도우 앱처럼 실행**할 수 있도록 Electron 구성을 추가했습니다.
 
 ### 가장 쉬운 방법(윈도우 일반 프로그램처럼)
-- `run-desktop.bat` 더블클릭: 데스크톱 앱 실행
+- `run-desktop.bat` 더블클릭: 데스크톱 앱 실행 (npm 없으면 Node 자동설치 시도, 실패 시 웹모드로 자동 전환)
 - `build-windows.bat` 더블클릭: 설치형(NSIS) + 포터블 exe 생성 (`dist/`)
+
+
+### npm not found 오류가 뜰 때
+`[ERROR] npm not found`가 떠도 최신 스크립트는 아래처럼 동작합니다.
+- `run-desktop.bat`: `winget`으로 Node.js LTS 자동 설치 시도 → 실패하면 Python 웹모드(`http://localhost:4173`) 자동 실행
+- `build-windows.bat`: `winget`으로 Node.js LTS 자동 설치 시도 (설치 후 다시 실행하면 빌드 진행)
 
 ### 개발 실행
 ```powershell
