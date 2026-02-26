@@ -34,6 +34,7 @@
     button.secondary { background: var(--secondary); }
     button.danger { background: #dc2626; }
     .muted { color: #64748b; font-size: 12px; }
+    .mapping-panel { margin-top: 10px; padding: 10px; border: 1px dashed var(--line); border-radius: 8px; background: #f8fafc; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th, td { border-bottom: 1px solid #e2e8f0; padding: 8px; text-align: left; }
     th { background: #f1f5f9; }
@@ -97,6 +98,20 @@
       <p class="muted">지원 형식: .csv, .xlsx, .xls</p>
       <p class="muted">권장 헤더: 항목명, 기준값, 하한, 상한, 실측값, ctq (동의어 자동 인식)</p>
       <input class="no-print" id="specFile" type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" />
+      <div class="mapping-panel no-print" id="mappingPanel" style="display:none;">
+        <p class="muted" style="margin-top:0;">기존 성적서 헤더를 자동 인식했습니다. 틀리면 아래에서 직접 컬럼을 지정한 뒤 적용하세요.</p>
+        <div class="row">
+          <div><label>항목명 컬럼</label><select id="mapName"></select></div>
+          <div><label>기준값 컬럼</label><select id="mapTarget"></select></div>
+          <div><label>하한 컬럼</label><select id="mapLower"></select></div>
+          <div><label>상한 컬럼</label><select id="mapUpper"></select></div>
+          <div><label>실측값 컬럼</label><select id="mapMeasured"></select></div>
+          <div><label>CTQ 컬럼(없으면 비워도 됨)</label><select id="mapCtq"></select></div>
+        </div>
+        <div class="btn-row">
+          <button class="secondary" id="applyMappingBtn">매핑 적용 후 성적서 반영</button>
+        </div>
+      </div>
 
       <table style="margin-top:10px;">
         <thead><tr><th>항목</th><th>기준/공차</th><th>실측</th><th>CTQ</th><th>판정</th><th>편차</th></tr></thead>
@@ -136,6 +151,8 @@
   <script>
     const STORAGE_KEY = 'inspectionPrototype.v2';
     const specs = [];
+    let pendingSpecRows = [];
+    let pendingHeaders = [];
 
     const HEADER_ALIASES = {
       name: ['항목명', '측정항목', '검사항목', 'spec', 'spec_name', 'name', 'item'],
@@ -159,6 +176,39 @@
         if (aliases.includes(normalized)) return row[originalKey];
       }
       return undefined;
+    }
+
+    function detectColumn(headers, key) {
+      const aliases = HEADER_ALIASES[key].map(normalizeHeader);
+      return headers.find((header) => aliases.includes(normalizeHeader(header))) || '';
+    }
+
+    function buildSelect(id, headers, defaultValue = '') {
+      const select = $(id);
+      select.innerHTML = '';
+      const emptyOption = document.createElement('option');
+      emptyOption.value = '';
+      emptyOption.textContent = '(선택 안함)';
+      select.appendChild(emptyOption);
+      headers.forEach((header) => {
+        const option = document.createElement('option');
+        option.value = header;
+        option.textContent = header;
+        select.appendChild(option);
+      });
+      select.value = defaultValue && headers.includes(defaultValue) ? defaultValue : '';
+    }
+
+    function showMappingPanel(rows, headers) {
+      pendingSpecRows = rows;
+      pendingHeaders = headers;
+      $('mappingPanel').style.display = 'block';
+      buildSelect('mapName', headers, detectColumn(headers, 'name'));
+      buildSelect('mapTarget', headers, detectColumn(headers, 'target'));
+      buildSelect('mapLower', headers, detectColumn(headers, 'lower'));
+      buildSelect('mapUpper', headers, detectColumn(headers, 'upper'));
+      buildSelect('mapMeasured', headers, detectColumn(headers, 'measured'));
+      buildSelect('mapCtq', headers, detectColumn(headers, 'ctq'));
     }
 
     function formatNum(v) { return Number(v).toFixed(3); }
@@ -305,66 +355,117 @@
       return loaded;
     }
 
-    function handleSpecCsv(text) {
-      const rows = parseCsvLines(text, 6);
-      if (!rows.length) return 0;
+    function parseSpecCsvToObjects(text) {
+      const rows = parseCsvLines(text, 2);
+      if (!rows.length) return { rows: [], headers: [] };
 
-      const header = rows[0].map((x) => normalizeHeader(x));
-      const isHeaderMode = header.includes(normalizeHeader('항목명')) || header.includes('name');
-
-      if (isHeaderMode) {
+      const firstRow = rows[0];
+      const hasHeader = firstRow.some((cell) => Number.isNaN(Number(cell)));
+      if (hasHeader) {
+        const headers = firstRow.map((x, idx) => String(x || '').trim() || `컬럼${idx + 1}`);
         const objects = rows.slice(1).map((cols) => {
           const obj = {};
-          rows[0].forEach((key, idx) => { obj[key] = cols[idx]; });
-          return {
-            name: pickField(obj, 'name'),
-            target: pickField(obj, 'target'),
-            lower: pickField(obj, 'lower'),
-            upper: pickField(obj, 'upper'),
-            measured: pickField(obj, 'measured'),
-            ctq: pickField(obj, 'ctq'),
-          };
+          headers.forEach((key, idx) => { obj[key] = cols[idx] ?? ''; });
+          return obj;
         });
-        return appendSpecRows(objects);
+        return { rows: objects, headers };
       }
 
-      return appendSpecRows(rows.map((cols) => ({
-        name: cols[0],
-        target: cols[1],
-        lower: cols[2],
-        upper: cols[3],
-        measured: cols[4],
-        ctq: cols[5],
-      })));
+      const headers = firstRow.map((_, idx) => `컬럼${idx + 1}`);
+      const objects = rows.map((cols) => {
+        const obj = {};
+        headers.forEach((key, idx) => { obj[key] = cols[idx] ?? ''; });
+        return obj;
+      });
+      return { rows: objects, headers };
     }
 
-    function handleSpecWorkbook(buffer) {
+    function parseSpecWorkbookToObjects(buffer) {
       const wb = XLSX.read(buffer, { type: 'array' });
       const firstSheet = wb.Sheets[wb.SheetNames[0]];
-      const jsonRows = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
-      const mapped = jsonRows.map((obj) => ({
-        name: pickField(obj, 'name'),
-        target: pickField(obj, 'target'),
-        lower: pickField(obj, 'lower'),
-        upper: pickField(obj, 'upper'),
-        measured: pickField(obj, 'measured'),
-        ctq: pickField(obj, 'ctq'),
+      const rowsByHeader = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
+      if (rowsByHeader.length) {
+        const headers = Array.from(rowsByHeader.reduce((set, row) => {
+          Object.keys(row).forEach((k) => set.add(k));
+          return set;
+        }, new Set()));
+        return { rows: rowsByHeader, headers };
+      }
+
+      const matrix = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
+      const headers = (matrix[0] || []).map((x, idx) => String(x || '').trim() || `컬럼${idx + 1}`);
+      const rows = matrix.slice(1).map((line) => {
+        const obj = {};
+        headers.forEach((key, idx) => { obj[key] = line[idx] ?? ''; });
+        return obj;
+      });
+      return { rows, headers };
+    }
+
+    function applyMappingAndLoad() {
+      if (!pendingSpecRows.length || !pendingHeaders.length) {
+        alert('먼저 성적서 파일을 업로드해주세요.');
+        return;
+      }
+      const mapping = {
+        name: $('mapName').value,
+        target: $('mapTarget').value,
+        lower: $('mapLower').value,
+        upper: $('mapUpper').value,
+        measured: $('mapMeasured').value,
+        ctq: $('mapCtq').value,
+      };
+
+      if (!mapping.name || !mapping.target || !mapping.lower || !mapping.upper || !mapping.measured) {
+        alert('항목명/기준값/하한/상한/실측값 컬럼은 반드시 지정해야 합니다.');
+        return;
+      }
+
+      const mappedRows = pendingSpecRows.map((row) => ({
+        name: row[mapping.name],
+        target: row[mapping.target],
+        lower: row[mapping.lower],
+        upper: row[mapping.upper],
+        measured: row[mapping.measured],
+        ctq: mapping.ctq ? row[mapping.ctq] : 'N',
       }));
-      return appendSpecRows(mapped);
+
+      const loaded = appendSpecRows(mappedRows);
+      alert(`성적서 반영 완료: ${loaded}건`);
+      $('mappingPanel').style.display = 'none';
     }
 
     function handleSpecFile(file) {
       const isExcel = /\.(xlsx|xls)$/i.test(file.name);
       const reader = new FileReader();
       reader.onload = () => {
-        let loaded = 0;
         try {
-          if (isExcel) {
-            loaded = handleSpecWorkbook(reader.result);
-            alert(`성적서 엑셀 로드 완료: ${loaded}건`);
+          const parsed = isExcel
+            ? parseSpecWorkbookToObjects(reader.result)
+            : parseSpecCsvToObjects(String(reader.result || ''));
+
+          if (!parsed.rows.length) {
+            alert('성적서 파일에서 데이터 행을 찾지 못했습니다.');
+            return;
+          }
+
+          showMappingPanel(parsed.rows, parsed.headers);
+
+          const autoMappedRows = parsed.rows.map((row) => ({
+            name: pickField(row, 'name'),
+            target: pickField(row, 'target'),
+            lower: pickField(row, 'lower'),
+            upper: pickField(row, 'upper'),
+            measured: pickField(row, 'measured'),
+            ctq: pickField(row, 'ctq') || 'N',
+          }));
+
+          const essentialReady = autoMappedRows.some((r) => r.name && r.target !== undefined && r.lower !== undefined && r.upper !== undefined && r.measured !== undefined);
+          if (essentialReady) {
+            const loaded = appendSpecRows(autoMappedRows);
+            alert(`${isExcel ? '엑셀' : 'CSV'} 자동 인식 반영 완료: ${loaded}건\n(필요하면 컬럼 매핑을 수정 후 다시 반영하세요)`);
           } else {
-            loaded = handleSpecCsv(String(reader.result || ''));
-            alert(`성적서 CSV 로드 완료: ${loaded}건`);
+            alert('자동 인식이 어려워 컬럼 매핑 패널을 열었습니다. 컬럼을 지정한 뒤 반영하세요.');
           }
         } catch (error) {
           console.error(error);
@@ -428,6 +529,8 @@
       if (file) handleSpecFile(file);
       e.target.value = '';
     });
+
+    $('applyMappingBtn').addEventListener('click', applyMappingAndLoad);
 
     $('scanFile').addEventListener('change', (e) => {
       const file = e.target.files && e.target.files[0];
