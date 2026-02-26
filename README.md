@@ -12,8 +12,8 @@
 
 ### npm not found 오류가 뜰 때
 `[ERROR] npm not found`가 떠도 최신 스크립트는 아래처럼 동작합니다.
-- `run-desktop.bat`: `winget`으로 Node.js LTS 자동 설치 시도 → 실패하면 Python 웹모드(`http://localhost:4173`) 자동 실행
-- `build-windows.bat`: `winget`으로 Node.js LTS 자동 설치 시도 (설치 후 다시 실행하면 빌드 진행)
+- `run-desktop.bat`: `winget` 자동 설치 시도 → 안되면 **포터블 Node.js 자동 다운로드** 시도 → 그래도 실패하면 Python 웹모드(`http://localhost:4173`) 자동 실행
+- `build-windows.bat`: `winget` 자동 설치 시도 → 안되면 **포터블 Node.js 자동 다운로드** 시도 후 바로 빌드 진행
 
 ### 개발 실행
 ```powershell
