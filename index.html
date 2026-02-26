@@ -500,9 +500,12 @@
       const parseBinaryStlCustom = (buffer) => {
         const view = new DataView(buffer);
         if (view.byteLength < 84) throw new Error('STL buffer too small');
-        const triCount = view.getUint32(80, true);
-        const expected = 84 + triCount * 50;
-        if (expected > view.byteLength) throw new Error('Invalid binary STL length');
+        let triCount = view.getUint32(80, true);
+        const maxTrianglesByLength = Math.floor((view.byteLength - 84) / 50);
+        if (!Number.isFinite(triCount) || triCount <= 0 || triCount > maxTrianglesByLength) {
+          triCount = maxTrianglesByLength;
+        }
+        if (!triCount || triCount < 1) throw new Error('Invalid binary STL triangle count');
 
         const positions = new Float32Array(triCount * 9);
         const normals = new Float32Array(triCount * 9);
@@ -535,10 +538,13 @@
       };
 
       const parseAsciiStlCustom = (text) => {
-        const vertexRegex = /vertex\s+([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)\s+([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)\s+([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)/g;
+        const normalizedText = String(text || '')
+          .replace(/([0-9]),([0-9])/g, '$1.$2')
+          .replace(/\r/g, '\n');
+        const vertexRegex = /vertex\s+([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)\s+([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)\s+([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)/gi;
         const vertices = [];
         let m;
-        while ((m = vertexRegex.exec(text)) !== null) {
+        while ((m = vertexRegex.exec(normalizedText)) !== null) {
           vertices.push(parseFloat(m[1]), parseFloat(m[2]), parseFloat(m[3]));
         }
         if (vertices.length < 9) throw new Error('ASCII STL vertices not found');
@@ -574,7 +580,7 @@
                 console.error('STL primary parse error:', primaryError);
                 console.error('STL binary fallback error:', binaryFallbackError);
                 console.error('STL ascii fallback error:', asciiFallbackError);
-                alert('STL 파싱 실패: 파일 형식이 특수하거나 메모리 제한일 수 있습니다. 같은 파일을 OBJ로 변환해 업로드하거나 STL을 경량화해서 다시 시도해주세요.');
+                alert('STL 파싱 실패: 포맷 변형(예: 헤더 triangle count 오류, ASCII 소수점 구분자)일 수 있습니다. 동일 파일을 OBJ로 변환하거나 CAD에서 STL을 다시 저장해 재시도해주세요.');
                 setCadStatus(`로드 실패(STL 파싱) (${file.name})`);
               }
             }
