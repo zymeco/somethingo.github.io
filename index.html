@@ -93,9 +93,10 @@
         <button class="danger" id="clearSpecBtn">항목 전체 삭제</button>
       </div>
 
-      <h3>성적서 CSV 업로드 (엑셀에서 CSV로 저장 후 업로드)</h3>
-      <p class="muted">형식: 항목명,target,lower,upper,measured,ctq</p>
-      <input class="no-print" id="specFile" type="file" accept=".csv,text/csv" />
+      <h3>성적서 CSV/엑셀 업로드</h3>
+      <p class="muted">지원 형식: .csv, .xlsx, .xls</p>
+      <p class="muted">권장 헤더: 항목명, 기준값, 하한, 상한, 실측값, ctq (동의어 자동 인식)</p>
+      <input class="no-print" id="specFile" type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" />
 
       <table style="margin-top:10px;">
         <thead><tr><th>항목</th><th>기준/공차</th><th>실측</th><th>CTQ</th><th>판정</th><th>편차</th></tr></thead>
@@ -131,11 +132,34 @@
     </section>
   </main>
 
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script>
     const STORAGE_KEY = 'inspectionPrototype.v2';
     const specs = [];
 
+    const HEADER_ALIASES = {
+      name: ['항목명', '측정항목', '검사항목', 'spec', 'spec_name', 'name', 'item'],
+      target: ['기준값', '기준', 'target', 'nominal', '기준치'],
+      lower: ['하한', '하한값', 'lsl', 'lower', 'min'],
+      upper: ['상한', '상한값', 'usl', 'upper', 'max'],
+      measured: ['실측값', '실측', '측정값', 'actual', 'result', '실적'],
+      ctq: ['ctq', '중요특성', '중요도', 'critical']
+    };
+
     const $ = (id) => document.getElementById(id);
+
+    function normalizeHeader(value) {
+      return String(value || '').toLowerCase().replace(/\s+/g, '').replace(/[_-]/g, '');
+    }
+
+    function pickField(row, key) {
+      const aliases = HEADER_ALIASES[key].map(normalizeHeader);
+      for (const originalKey of Object.keys(row)) {
+        const normalized = normalizeHeader(originalKey);
+        if (aliases.includes(normalized)) return row[originalKey];
+      }
+      return undefined;
+    }
 
     function formatNum(v) { return Number(v).toFixed(3); }
 
@@ -257,30 +281,98 @@
       if (!invalid) specs.push(row);
     }
 
+    function toSpecRow(raw) {
+      const normalizedCtq = String(raw.ctq || 'N').trim().toUpperCase();
+      return {
+        name: String(raw.name || '').trim(),
+        target: Number(raw.target),
+        lower: Number(raw.lower),
+        upper: Number(raw.upper),
+        measured: Number(raw.measured),
+        ctq: normalizedCtq === 'Y' || normalizedCtq === '1' || normalizedCtq === 'TRUE' ? 'Y' : 'N',
+      };
+    }
+
+    function appendSpecRows(rows) {
+      let loaded = 0;
+      rows.forEach((raw) => {
+        const before = specs.length;
+        addSpecRow(toSpecRow(raw));
+        if (specs.length > before) loaded += 1;
+      });
+      renderSpecs();
+      runAnalysis();
+      return loaded;
+    }
+
+    function handleSpecCsv(text) {
+      const rows = parseCsvLines(text, 6);
+      if (!rows.length) return 0;
+
+      const header = rows[0].map((x) => normalizeHeader(x));
+      const isHeaderMode = header.includes(normalizeHeader('항목명')) || header.includes('name');
+
+      if (isHeaderMode) {
+        const objects = rows.slice(1).map((cols) => {
+          const obj = {};
+          rows[0].forEach((key, idx) => { obj[key] = cols[idx]; });
+          return {
+            name: pickField(obj, 'name'),
+            target: pickField(obj, 'target'),
+            lower: pickField(obj, 'lower'),
+            upper: pickField(obj, 'upper'),
+            measured: pickField(obj, 'measured'),
+            ctq: pickField(obj, 'ctq'),
+          };
+        });
+        return appendSpecRows(objects);
+      }
+
+      return appendSpecRows(rows.map((cols) => ({
+        name: cols[0],
+        target: cols[1],
+        lower: cols[2],
+        upper: cols[3],
+        measured: cols[4],
+        ctq: cols[5],
+      })));
+    }
+
+    function handleSpecWorkbook(buffer) {
+      const wb = XLSX.read(buffer, { type: 'array' });
+      const firstSheet = wb.Sheets[wb.SheetNames[0]];
+      const jsonRows = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
+      const mapped = jsonRows.map((obj) => ({
+        name: pickField(obj, 'name'),
+        target: pickField(obj, 'target'),
+        lower: pickField(obj, 'lower'),
+        upper: pickField(obj, 'upper'),
+        measured: pickField(obj, 'measured'),
+        ctq: pickField(obj, 'ctq'),
+      }));
+      return appendSpecRows(mapped);
+    }
+
     function handleSpecFile(file) {
+      const isExcel = /\.(xlsx|xls)$/i.test(file.name);
       const reader = new FileReader();
       reader.onload = () => {
-        const rows = parseCsvLines(String(reader.result || ''), 6);
         let loaded = 0;
-        rows.forEach((cols, i) => {
-          if (i === 0 && cols[0].toLowerCase().includes('name')) return; // header skip
-          const row = {
-            name: cols[0],
-            target: Number(cols[1]),
-            lower: Number(cols[2]),
-            upper: Number(cols[3]),
-            measured: Number(cols[4]),
-            ctq: (cols[5] || 'N').toUpperCase() === 'Y' ? 'Y' : 'N',
-          };
-          const before = specs.length;
-          addSpecRow(row);
-          if (specs.length > before) loaded += 1;
-        });
-        renderSpecs();
-        runAnalysis();
-        alert(`성적서 CSV 로드 완료: ${loaded}건`);
+        try {
+          if (isExcel) {
+            loaded = handleSpecWorkbook(reader.result);
+            alert(`성적서 엑셀 로드 완료: ${loaded}건`);
+          } else {
+            loaded = handleSpecCsv(String(reader.result || ''));
+            alert(`성적서 CSV 로드 완료: ${loaded}건`);
+          }
+        } catch (error) {
+          console.error(error);
+          alert('성적서 파일 파싱 중 오류가 발생했습니다. 헤더명을 확인해주세요.');
+        }
       };
-      reader.readAsText(file, 'utf-8');
+      if (isExcel) reader.readAsArrayBuffer(file);
+      else reader.readAsText(file, 'utf-8');
     }
 
     function handleScanFile(file) {
