@@ -127,6 +127,9 @@
 스프링백영역,0.18</textarea>
       <h3>스캔 편차 CSV 파일 업로드</h3>
       <input class="no-print" id="scanFile" type="file" accept=".csv,text/csv" />
+      <h3>기준 CAD 파일 업로드 (참조용)</h3>
+      <input class="no-print" id="cadFile" type="file" accept=".stl,.obj,model/stl,text/plain" />
+      <p class="muted" id="cadFileInfo">현재 선택된 CAD 파일 없음</p>
       <div class="btn-row no-print">
         <button id="analyzeBtn">통합 분석 실행</button>
         <button class="secondary" id="printBtn">성적서(PDF) 출력</button>
@@ -153,6 +156,7 @@
     const specs = [];
     let pendingSpecRows = [];
     let pendingHeaders = [];
+    let selectedCadFileName = '';
 
     const HEADER_ALIASES = {
       name: ['항목명', '측정항목', '검사항목', 'spec', 'spec_name', 'name', 'item'],
@@ -293,6 +297,13 @@
       $('recommendations').innerHTML = recs.map((x) => `<li>${x}</li>`).join('');
     }
 
+    function setCadFileName(name) {
+      selectedCadFileName = name || '';
+      $('cadFileInfo').textContent = selectedCadFileName
+        ? `선택된 CAD 파일: ${selectedCadFileName}`
+        : '현재 선택된 CAD 파일 없음';
+    }
+
     function saveData() {
       const payload = {
         model: $('model').value,
@@ -300,6 +311,7 @@
         lot: $('lot').value,
         inspector: $('inspector').value,
         scanCsv: $('scanCsv').value,
+        cadFileName: selectedCadFileName,
         specs,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -315,6 +327,7 @@
       $('lot').value = data.lot || '';
       $('inspector').value = data.inspector || '';
       $('scanCsv').value = data.scanCsv || '';
+      setCadFileName(data.cadFileName || '');
       specs.splice(0, specs.length, ...(data.specs || []));
       renderSpecs();
       runAnalysis();
@@ -323,6 +336,7 @@
 
     function resetSavedData() {
       localStorage.removeItem(STORAGE_KEY);
+      setCadFileName('');
       alert('저장 데이터가 삭제되었습니다.');
     }
 
@@ -538,7 +552,20 @@
       e.target.value = '';
     });
 
+    $('cadFile').addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (file) {
+        const valid = /\.(stl|obj)$/i.test(file.name);
+        if (!valid) {
+          alert('기준 CAD 파일은 .stl 또는 .obj 형식을 권장합니다.');
+        }
+        setCadFileName(file.name);
+      }
+      e.target.value = '';
+    });
+
     $('sampleBtn').click();
+    setCadFileName('');
   </script>
 </body>
 </html>
