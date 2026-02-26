@@ -73,6 +73,23 @@
         <div><label>Lot/회차</label><input id="lot" value="TRY-01" /></div>
         <div><label>검사자</label><input id="inspector" value="품질팀" /></div>
       </div>
+
+      <h3>금형 공법/공정 정보 (OP10 ~ OP50)</h3>
+      <div class="row">
+        <div><label>OP10 공정명</label><input id="op10Name" value="블랭킹" /></div>
+        <div><label>OP20 공정명</label><input id="op20Name" value="드로잉" /></div>
+        <div><label>OP30 공정명</label><input id="op30Name" value="트리밍" /></div>
+        <div><label>OP40 공정명</label><input id="op40Name" value="피어싱" /></div>
+        <div><label>OP50 공정명</label><input id="op50Name" value="플랜징" /></div>
+      </div>
+      <div class="row">
+        <div><label>OP10 설명 (예: 소재 컷팅/윤활조건)</label><textarea id="op10Desc"></textarea></div>
+        <div><label>OP20 설명</label><textarea id="op20Desc"></textarea></div>
+        <div><label>OP30 설명</label><textarea id="op30Desc"></textarea></div>
+        <div><label>OP40 설명</label><textarea id="op40Desc"></textarea></div>
+        <div><label>OP50 설명</label><textarea id="op50Desc"></textarea></div>
+      </div>
+
       <div class="btn-row no-print">
         <button id="saveBtn">현재 데이터 저장</button>
         <button class="secondary" id="loadBtn">저장 데이터 불러오기</button>
@@ -479,6 +496,13 @@
         part: $('part').value,
         lot: $('lot').value,
         inspector: $('inspector').value,
+        processPlan: {
+          op10: { name: $('op10Name').value, desc: $('op10Desc').value },
+          op20: { name: $('op20Name').value, desc: $('op20Desc').value },
+          op30: { name: $('op30Name').value, desc: $('op30Desc').value },
+          op40: { name: $('op40Name').value, desc: $('op40Desc').value },
+          op50: { name: $('op50Name').value, desc: $('op50Desc').value },
+        },
         scanCsv: $('scanCsv').value,
         cadFileName: selectedCadFileName,
         specs,
@@ -495,6 +519,17 @@
       $('part').value = data.part || '';
       $('lot').value = data.lot || '';
       $('inspector').value = data.inspector || '';
+      const pp = data.processPlan || {};
+      $('op10Name').value = pp.op10?.name || $('op10Name').value;
+      $('op20Name').value = pp.op20?.name || $('op20Name').value;
+      $('op30Name').value = pp.op30?.name || $('op30Name').value;
+      $('op40Name').value = pp.op40?.name || $('op40Name').value;
+      $('op50Name').value = pp.op50?.name || $('op50Name').value;
+      $('op10Desc').value = pp.op10?.desc || '';
+      $('op20Desc').value = pp.op20?.desc || '';
+      $('op30Desc').value = pp.op30?.desc || '';
+      $('op40Desc').value = pp.op40?.desc || '';
+      $('op50Desc').value = pp.op50?.desc || '';
       $('scanCsv').value = data.scanCsv || '';
       setCadFileName(data.cadFileName || '');
       specs.splice(0, specs.length, ...(data.specs || []));
@@ -697,6 +732,11 @@
         { name: '코너 R', target: 3.0, lower: 2.9, upper: 3.1, measured: 2.82, ctq: 'Y' }
       );
       $('scanCsv').value = '좌측플랜지,0.35\n코너부,-0.22\n스프링백영역,0.18';
+      $('op10Desc').value = '블랭킹 금형으로 소재 형상 컷팅, 버어 방향 확인';
+      $('op20Desc').value = '드로잉 성형, 유입량/윤활량 조건 점검';
+      $('op30Desc').value = '외곽 트리밍 및 스크랩 배출 상태 확인';
+      $('op40Desc').value = '피어싱 홀 위치/직경 공차 확인';
+      $('op50Desc').value = '플랜징 각도 및 스프링백 경향 보정';
       renderSpecs();
       runAnalysis();
     });
