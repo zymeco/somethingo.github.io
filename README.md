@@ -1,5 +1,14 @@
 # 초도제품 검사 프로토타입 실행 방법
 
+
+## 0) 웹에서 바로 열기 (다운로드 없이)
+- 이 저장소는 GitHub Pages 배포 워크플로우(`.github/workflows/deploy-pages.yml`)를 포함합니다.
+- 저장소 관리자 계정에서 **Settings → Pages → Build and deployment → Source = GitHub Actions** 로 설정하면,
+  push 후 웹 URL에서 바로 열 수 있습니다.
+- 기본 주소 예시:
+  - `https://<github-id>.github.io/<repo-name>/`
+  - 커스텀 도메인을 쓰면 해당 도메인으로 접속
+
 이번 프로젝트는 **정적 웹 페이지(`index.html`)** 이라 설치 없이 브라우저로 실행할 수 있습니다.
 다만 `file://` 로 더블클릭 실행보다 **로컬 서버 실행**을 권장합니다.
 
