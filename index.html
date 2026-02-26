@@ -483,6 +483,58 @@
         return new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0x60a5fa, metalness: 0.1, roughness: 0.6 }));
       };
 
+      const parseBinaryStlCustom = (buffer) => {
+        const view = new DataView(buffer);
+        if (view.byteLength < 84) throw new Error('STL buffer too small');
+        const triCount = view.getUint32(80, true);
+        const expected = 84 + triCount * 50;
+        if (expected > view.byteLength) throw new Error('Invalid binary STL length');
+
+        const positions = new Float32Array(triCount * 9);
+        const normals = new Float32Array(triCount * 9);
+        let offset = 84;
+        let v = 0;
+
+        for (let i = 0; i < triCount; i++) {
+          const nx = view.getFloat32(offset, true);
+          const ny = view.getFloat32(offset + 4, true);
+          const nz = view.getFloat32(offset + 8, true);
+          offset += 12;
+
+          for (let j = 0; j < 3; j++) {
+            const x = view.getFloat32(offset, true);
+            const y = view.getFloat32(offset + 4, true);
+            const z = view.getFloat32(offset + 8, true);
+            positions[v] = x; normals[v] = nx; v++;
+            positions[v] = y; normals[v] = ny; v++;
+            positions[v] = z; normals[v] = nz; v++;
+            offset += 12;
+          }
+          offset += 2;
+        }
+
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+        geometry.computeBoundingSphere();
+        return new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0x60a5fa, metalness: 0.1, roughness: 0.6 }));
+      };
+
+      const parseAsciiStlCustom = (text) => {
+        const vertexRegex = /vertex\s+([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)\s+([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)\s+([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)/g;
+        const vertices = [];
+        let m;
+        while ((m = vertexRegex.exec(text)) !== null) {
+          vertices.push(parseFloat(m[1]), parseFloat(m[2]), parseFloat(m[3]));
+        }
+        if (vertices.length < 9) throw new Error('ASCII STL vertices not found');
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+        geometry.computeVertexNormals();
+        geometry.computeBoundingSphere();
+        return new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0x60a5fa, metalness: 0.1, roughness: 0.6 }));
+      };
+
       const parseObj = (text) => {
         const loader = new THREE.OBJLoader();
         return loader.parse(String(text || ''));
@@ -495,17 +547,22 @@
         reader.onload = () => {
           try {
             loadFromParsedObject(parseStl(reader.result));
-          } catch (binaryError) {
+          } catch (primaryError) {
             try {
-              const text = new TextDecoder('utf-8', { fatal: false }).decode(reader.result);
-              const asciiBuffer = new TextEncoder().encode(text).buffer;
-              loadFromParsedObject(parseStl(asciiBuffer));
-              setCadStatus(`표시 완료(ASCII STL 파서) (${file.name})`);
-            } catch (asciiError) {
-              console.error('STL binary parse error:', binaryError);
-              console.error('STL ascii parse error:', asciiError);
-              alert('STL 파싱 실패: 파일이 매우 크거나 형식이 비표준일 수 있습니다. 가능하면 다른 STL(ASCII/Binary)로 저장 후 다시 시도해주세요.');
-              setCadStatus(`로드 실패(STL 파싱) (${file.name})`);
+              loadFromParsedObject(parseBinaryStlCustom(reader.result));
+              setCadStatus(`표시 완료(커스텀 Binary 파서) (${file.name})`);
+            } catch (binaryFallbackError) {
+              try {
+                const text = new TextDecoder('utf-8', { fatal: false }).decode(reader.result);
+                loadFromParsedObject(parseAsciiStlCustom(text));
+                setCadStatus(`표시 완료(커스텀 ASCII 파서) (${file.name})`);
+              } catch (asciiFallbackError) {
+                console.error('STL primary parse error:', primaryError);
+                console.error('STL binary fallback error:', binaryFallbackError);
+                console.error('STL ascii fallback error:', asciiFallbackError);
+                alert('STL 파싱 실패: 파일 형식이 특수하거나 메모리 제한일 수 있습니다. 같은 파일을 OBJ로 변환해 업로드하거나 STL을 경량화해서 다시 시도해주세요.');
+                setCadStatus(`로드 실패(STL 파싱) (${file.name})`);
+              }
             }
           }
         };
