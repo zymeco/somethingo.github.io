@@ -1,2 +1,349 @@
-blog
-<script type="text/javasript">location.href="https://somethingo.co.kr";</script>
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>초도제품 검사·보정 방향 제안 프로토타입</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --card: #fff;
+      --line: #d8e2f0;
+      --text: #0f172a;
+      --primary: #1d4ed8;
+      --secondary: #475569;
+      --ok: #166534;
+      --ng: #b91c1c;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Pretendard", "Noto Sans KR", sans-serif; color: var(--text); background: var(--bg); }
+    header { padding: 18px 20px; color: #fff; background: linear-gradient(135deg, #1d4ed8, #1e3a8a); }
+    header h1 { margin: 0 0 4px; font-size: 22px; }
+    header p { margin: 0; opacity: .92; }
+    main { max-width: 1200px; margin: 18px auto 28px; padding: 0 14px; display: grid; gap: 14px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; box-shadow: 0 2px 8px rgba(15,23,42,.05); }
+    h2 { margin: 0 0 10px; font-size: 18px; }
+    h3 { margin: 14px 0 8px; font-size: 15px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+    label { display: block; margin-bottom: 4px; font-size: 12px; color: #334155; }
+    input, select, textarea, button { width: 100%; font: inherit; border-radius: 8px; border: 1px solid var(--line); padding: 8px; }
+    textarea { min-height: 120px; resize: vertical; }
+    .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+    .btn-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin-top: 8px; }
+    button { border: none; color: #fff; background: var(--primary); font-weight: 600; cursor: pointer; }
+    button.secondary { background: var(--secondary); }
+    button.danger { background: #dc2626; }
+    .muted { color: #64748b; font-size: 12px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border-bottom: 1px solid #e2e8f0; padding: 8px; text-align: left; }
+    th { background: #f1f5f9; }
+    .pill { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+    .ok { color: var(--ok); background: #dcfce7; }
+    .ng { color: var(--ng); background: #fee2e2; }
+    .kpi { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .kpi > div { border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: #f8fafc; }
+    .kpi strong { display: block; margin-top: 2px; font-size: 20px; }
+
+    @media (max-width: 768px) { .kpi { grid-template-columns: 1fr; } }
+
+    @media print {
+      header, .no-print { display: none !important; }
+      body { background: #fff; }
+      main { margin: 0; max-width: 100%; padding: 0; }
+      .card { box-shadow: none; border: 1px solid #ccc; break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>초도제품 검사 · 스펙 비교 · 수정방향 제안</h1>
+    <p>성적서 입력/파일업로드 + 3D 편차 분석 + 추천 + 저장/출력</p>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>1) 기본정보</h2>
+      <div class="grid">
+        <div><label>차종</label><input id="model" value="EV9" /></div>
+        <div><label>부품명</label><input id="part" value="FRONT INNER PANEL" /></div>
+        <div><label>Lot/회차</label><input id="lot" value="TRY-01" /></div>
+        <div><label>검사자</label><input id="inspector" value="품질팀" /></div>
+      </div>
+      <div class="btn-row no-print">
+        <button id="saveBtn">현재 데이터 저장</button>
+        <button class="secondary" id="loadBtn">저장 데이터 불러오기</button>
+        <button class="danger" id="resetBtn">저장 데이터 초기화</button>
+      </div>
+      <p class="muted">브라우저 LocalStorage에 저장됩니다. (실서비스 시 DB/API로 교체)</p>
+    </section>
+
+    <section class="card">
+      <h2>2) 성적서 입력</h2>
+      <div class="row">
+        <div><label>항목명</label><input id="specName" placeholder="예: 플랜지 높이" /></div>
+        <div><label>기준값</label><input id="target" type="number" step="0.001" /></div>
+        <div><label>하한</label><input id="lower" type="number" step="0.001" /></div>
+        <div><label>상한</label><input id="upper" type="number" step="0.001" /></div>
+        <div><label>실측값</label><input id="measured" type="number" step="0.001" /></div>
+        <div><label>CTQ</label><select id="ctq"><option value="N">N</option><option value="Y">Y</option></select></div>
+      </div>
+      <div class="btn-row no-print">
+        <button id="addSpecBtn">항목 추가</button>
+        <button class="secondary" id="sampleBtn">샘플 데이터</button>
+        <button class="danger" id="clearSpecBtn">항목 전체 삭제</button>
+      </div>
+
+      <h3>성적서 CSV 업로드 (엑셀에서 CSV로 저장 후 업로드)</h3>
+      <p class="muted">형식: 항목명,target,lower,upper,measured,ctq</p>
+      <input class="no-print" id="specFile" type="file" accept=".csv,text/csv" />
+
+      <table style="margin-top:10px;">
+        <thead><tr><th>항목</th><th>기준/공차</th><th>실측</th><th>CTQ</th><th>판정</th><th>편차</th></tr></thead>
+        <tbody id="specBody"></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>3) 3D 스캔 편차 입력</h2>
+      <p class="muted">형식: 영역,편차(mm). 예) 좌측플랜지,0.35</p>
+      <textarea id="scanCsv">좌측플랜지,0.35
+코너부,-0.22
+스프링백영역,0.18</textarea>
+      <h3>스캔 편차 CSV 파일 업로드</h3>
+      <input class="no-print" id="scanFile" type="file" accept=".csv,text/csv" />
+      <div class="btn-row no-print">
+        <button id="analyzeBtn">통합 분석 실행</button>
+        <button class="secondary" id="printBtn">성적서(PDF) 출력</button>
+      </div>
+    </section>
+
+    <section class="card" id="reportSection">
+      <h2>4) 분석 결과</h2>
+      <div class="kpi">
+        <div><span>성적서 OK 비율</span><strong id="kpiSpec">-</strong></div>
+        <div><span>3D 평균 편차</span><strong id="kpiAvg">-</strong></div>
+        <div><span>Lot 판정</span><strong id="kpiLot">-</strong></div>
+      </div>
+
+      <h3>수정 방향 제안</h3>
+      <ul id="recommendations"></ul>
+      <p class="muted">※ 룰 기반 초안입니다. 실제 금형 수정 전 담당자 승인 필요.</p>
+    </section>
+  </main>
+
+  <script>
+    const STORAGE_KEY = 'inspectionPrototype.v2';
+    const specs = [];
+
+    const $ = (id) => document.getElementById(id);
+
+    function formatNum(v) { return Number(v).toFixed(3); }
+
+    function judgeSpec(item) {
+      const ok = item.measured >= item.lower && item.measured <= item.upper;
+      const deviation = item.measured - item.target;
+      return { ok, deviation };
+    }
+
+    function renderSpecs() {
+      const body = $('specBody');
+      body.innerHTML = '';
+      specs.forEach((item) => {
+        const j = judgeSpec(item);
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${item.name}</td>
+          <td>${formatNum(item.target)} (${formatNum(item.lower)} ~ ${formatNum(item.upper)})</td>
+          <td>${formatNum(item.measured)}</td>
+          <td>${item.ctq}</td>
+          <td><span class="pill ${j.ok ? 'ok' : 'ng'}">${j.ok ? 'OK' : 'NOK'}</span></td>
+          <td>${j.deviation >= 0 ? '+' : ''}${formatNum(j.deviation)} mm</td>
+        `;
+        body.appendChild(tr);
+      });
+    }
+
+    function parseCsvLines(text, minColumns) {
+      return text.split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => line.split(',').map((x) => x.trim()))
+        .filter((arr) => arr.length >= minColumns);
+    }
+
+    function parseScanCsv(text) {
+      return parseCsvLines(text, 2)
+        .map(([zone, deviation]) => ({ zone, deviation: Number(deviation) }))
+        .filter((x) => x.zone && Number.isFinite(x.deviation));
+    }
+
+    function makeRecommendations(specRows, scanRows) {
+      const rec = [];
+      if (specRows.some((s) => s.ctq === 'Y' && !judgeSpec(s).ok)) {
+        rec.push('CTQ 불합격 항목 존재: 측정 신뢰성/셋업/금형 상태를 우선 점검하세요.');
+      }
+      scanRows.forEach((row) => {
+        if (row.zone.includes('플랜지') && row.deviation > 0.2) {
+          rec.push(`${row.zone} +${formatNum(row.deviation)}mm: 과성형 경향 → 압입/클리어런스 조정, 비드 강성 완화 검토.`);
+        }
+        if (row.zone.includes('코너') && row.deviation < -0.15) {
+          rec.push(`${row.zone} ${formatNum(row.deviation)}mm: 미성형 경향 → 유동성 개선 및 압력 밸런스 재조정 검토.`);
+        }
+        if (row.zone.includes('스프링백') && Math.abs(row.deviation) > 0.12) {
+          rec.push(`${row.zone} ${formatNum(row.deviation)}mm: 스프링백 편차 → 보정 오프셋 후보 비교 후 재트라이.`);
+        }
+      });
+      if (!rec.length) rec.push('큰 이상 패턴 없음: 현재 조건 유지 및 데이터 누적 권장.');
+      return rec;
+    }
+
+    function runAnalysis() {
+      const judged = specs.map((s) => ({ ...s, ...judgeSpec(s) }));
+      const passCount = judged.filter((x) => x.ok).length;
+      const specRatio = judged.length ? Math.round((passCount / judged.length) * 100) : 0;
+
+      const scanRows = parseScanCsv($('scanCsv').value);
+      const avgDeviation = scanRows.length
+        ? scanRows.reduce((acc, cur) => acc + cur.deviation, 0) / scanRows.length
+        : 0;
+
+      const lotFail = judged.some((x) => x.ctq === 'Y' && !x.ok)
+        || scanRows.some((x) => Math.abs(x.deviation) > 0.3);
+
+      $('kpiSpec').textContent = `${specRatio}%`;
+      $('kpiAvg').textContent = `${avgDeviation >= 0 ? '+' : ''}${formatNum(avgDeviation)} mm`;
+      $('kpiLot').textContent = lotFail ? 'NOK' : 'OK';
+      $('kpiLot').style.color = lotFail ? 'var(--ng)' : 'var(--ok)';
+
+      const recs = makeRecommendations(specs, scanRows);
+      $('recommendations').innerHTML = recs.map((x) => `<li>${x}</li>`).join('');
+    }
+
+    function saveData() {
+      const payload = {
+        model: $('model').value,
+        part: $('part').value,
+        lot: $('lot').value,
+        inspector: $('inspector').value,
+        scanCsv: $('scanCsv').value,
+        specs,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      alert('저장 완료');
+    }
+
+    function loadData() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) { alert('저장된 데이터가 없습니다.'); return; }
+      const data = JSON.parse(raw);
+      $('model').value = data.model || '';
+      $('part').value = data.part || '';
+      $('lot').value = data.lot || '';
+      $('inspector').value = data.inspector || '';
+      $('scanCsv').value = data.scanCsv || '';
+      specs.splice(0, specs.length, ...(data.specs || []));
+      renderSpecs();
+      runAnalysis();
+      alert('불러오기 완료');
+    }
+
+    function resetSavedData() {
+      localStorage.removeItem(STORAGE_KEY);
+      alert('저장 데이터가 삭제되었습니다.');
+    }
+
+    function addSpecRow(row) {
+      const invalid = !row.name || [row.target, row.lower, row.upper, row.measured].some((v) => !Number.isFinite(v));
+      if (!invalid) specs.push(row);
+    }
+
+    function handleSpecFile(file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const rows = parseCsvLines(String(reader.result || ''), 6);
+        let loaded = 0;
+        rows.forEach((cols, i) => {
+          if (i === 0 && cols[0].toLowerCase().includes('name')) return; // header skip
+          const row = {
+            name: cols[0],
+            target: Number(cols[1]),
+            lower: Number(cols[2]),
+            upper: Number(cols[3]),
+            measured: Number(cols[4]),
+            ctq: (cols[5] || 'N').toUpperCase() === 'Y' ? 'Y' : 'N',
+          };
+          const before = specs.length;
+          addSpecRow(row);
+          if (specs.length > before) loaded += 1;
+        });
+        renderSpecs();
+        runAnalysis();
+        alert(`성적서 CSV 로드 완료: ${loaded}건`);
+      };
+      reader.readAsText(file, 'utf-8');
+    }
+
+    function handleScanFile(file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        $('scanCsv').value = String(reader.result || '');
+        runAnalysis();
+        alert('스캔 편차 CSV 반영 완료');
+      };
+      reader.readAsText(file, 'utf-8');
+    }
+
+    $('addSpecBtn').addEventListener('click', () => {
+      const row = {
+        name: $('specName').value.trim(),
+        target: Number($('target').value),
+        lower: Number($('lower').value),
+        upper: Number($('upper').value),
+        measured: Number($('measured').value),
+        ctq: $('ctq').value,
+      };
+      const before = specs.length;
+      addSpecRow(row);
+      if (specs.length === before) { alert('입력값을 확인해주세요.'); return; }
+      renderSpecs();
+    });
+
+    $('clearSpecBtn').addEventListener('click', () => {
+      specs.splice(0, specs.length);
+      renderSpecs();
+      runAnalysis();
+    });
+
+    $('sampleBtn').addEventListener('click', () => {
+      specs.splice(0, specs.length,
+        { name: '플랜지 높이', target: 10.0, lower: 9.8, upper: 10.2, measured: 10.31, ctq: 'Y' },
+        { name: '홀 간격', target: 120.0, lower: 119.8, upper: 120.2, measured: 120.05, ctq: 'N' },
+        { name: '코너 R', target: 3.0, lower: 2.9, upper: 3.1, measured: 2.82, ctq: 'Y' }
+      );
+      $('scanCsv').value = '좌측플랜지,0.35\n코너부,-0.22\n스프링백영역,0.18';
+      renderSpecs();
+      runAnalysis();
+    });
+
+    $('analyzeBtn').addEventListener('click', runAnalysis);
+    $('printBtn').addEventListener('click', () => window.print());
+    $('saveBtn').addEventListener('click', saveData);
+    $('loadBtn').addEventListener('click', loadData);
+    $('resetBtn').addEventListener('click', resetSavedData);
+
+    $('specFile').addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (file) handleSpecFile(file);
+      e.target.value = '';
+    });
+
+    $('scanFile').addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (file) handleScanFile(file);
+      e.target.value = '';
+    });
+
+    $('sampleBtn').click();
+  </script>
+</body>
+</html>
