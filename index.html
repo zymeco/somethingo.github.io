@@ -575,13 +575,25 @@
               try {
                 const text = new TextDecoder('utf-8', { fatal: false }).decode(reader.result);
                 loadFromParsedObject(parseAsciiStlCustom(text));
-                setCadStatus(`표시 완료(커스텀 ASCII 파서) (${file.name})`);
-              } catch (asciiFallbackError) {
-                console.error('STL primary parse error:', primaryError);
-                console.error('STL binary fallback error:', binaryFallbackError);
-                console.error('STL ascii fallback error:', asciiFallbackError);
-                alert('STL 파싱 실패: 포맷 변형(예: 헤더 triangle count 오류, ASCII 소수점 구분자)일 수 있습니다. 동일 파일을 OBJ로 변환하거나 CAD에서 STL을 다시 저장해 재시도해주세요.');
-                setCadStatus(`로드 실패(STL 파싱) (${file.name})`);
+                setCadStatus(`표시 완료(커스텀 ASCII 파서-buffer) (${file.name})`);
+              } catch (asciiBufferError) {
+                file.text().then((rawText) => {
+                  try {
+                    loadFromParsedObject(parseAsciiStlCustom(rawText));
+                    setCadStatus(`표시 완료(커스텀 ASCII 파서-file.text) (${file.name})`);
+                  } catch (asciiTextError) {
+                    console.error('STL primary parse error:', primaryError);
+                    console.error('STL binary fallback error:', binaryFallbackError);
+                    console.error('STL ascii buffer fallback error:', asciiBufferError);
+                    console.error('STL ascii file.text fallback error:', asciiTextError);
+                    alert('STL 파싱 실패: 파일 포맷 변형이 큰 케이스일 수 있습니다. 파일이 정상이라면 CAD에서 STL을 다시 저장(ASCII/Binary 전환)하거나 OBJ로 변환해서 업로드해주세요.');
+                    setCadStatus(`로드 실패(STL 파싱) (${file.name})`);
+                  }
+                }).catch((textReadError) => {
+                  console.error('STL text read error:', textReadError);
+                  alert('STL 파싱 실패: 파일 텍스트 재읽기에도 실패했습니다. 브라우저/파일 권한을 확인해주세요.');
+                  setCadStatus(`로드 실패(STL text read) (${file.name})`);
+                });
               }
             }
           }
